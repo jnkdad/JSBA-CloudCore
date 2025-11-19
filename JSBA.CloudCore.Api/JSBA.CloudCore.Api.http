@@ -1,0 +1,6 @@
+@JSBA.CloudCore.Api_HostAddress = http://localhost:5091
+
+GET {{JSBA.CloudCore.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
