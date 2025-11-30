@@ -1,0 +1,24 @@
+# Visual Studio
+.vs/
+*.user
+*.suo
+
+# Build outputs
+bin/
+obj/
+**/bin/
+**/obj/
+[Bb]uild/
+
+# Test results & logs
+TestResults/
+*.log
+
+# Copilot / design-time DBs
+*.db
+*.db-shm
+*.db-wal
+
+# Misc
+*.opendb
+*.VC.db
