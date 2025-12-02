@@ -1,42 +1,31 @@
+using JSBA.CloudCore.Contracts.Interfaces;
 using JSBA.CloudCore.Extractor;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 
-namespace JSBA.CloudCore.Api
+var builder = WebApplication.CreateBuilder(args);
+
+// Add services to the container
+builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
+// Register PDF Extractor service (interface-oriented design)
+builder.Services.AddScoped<IPdfExtractor, ExtractorFacade>();
+
+// Configure file upload limits (50MB max)
+builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
 {
-    public class Program
-    {
-        public static void Main(string[] args)
-        {
-            var builder = WebApplication.CreateBuilder(args);
+    options.MultipartBodyLengthLimit = 52428800; // 50MB
+});
 
-            // Add services to the container.
-            builder.Services.AddEndpointsApiExplorer();
-            builder.Services.AddSwaggerGen();
-            builder.Services.AddControllers();          // <-- enable controllers
+var app = builder.Build();
 
-            // Register core services.
-            builder.Services.AddSingleton<PdfExtractor>();
-
-            var app = builder.Build();
-
-            // Configure the HTTP request pipeline.
-            if (app.Environment.IsDevelopment())
-            {
-                app.UseSwagger();
-                app.UseSwaggerUI();
-            }
-
-            app.UseRouting();
-
-            // Map attribute-routed controllers like RoomsController
-            app.MapControllers();                       // <-- hook them in
-
-            // Root ping endpoint
-            app.MapGet("/", () => "JSBA Cloud Core API is running.");
-
-            app.Run();
-        }
-    }
+// Configure the HTTP request pipeline
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
 }
+
+app.MapControllers();
+
+app.Run();
