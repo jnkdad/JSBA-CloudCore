@@ -1,6 +1,11 @@
 // ExtractorSettings.cs
 // Settings classes for configuring PDF extraction behavior
 // These are not part of the public API contract
+//
+// NOTE: The filtering and statistics features in these settings are intended to support
+// later statistics analysis and ML (machine learning) analysis. The path statistics,
+// line width distributions, and filtering capabilities are designed to enable data-driven
+// improvements to extraction algorithms and quality assessment.
 
 using System.Collections.Generic;
 using System.IO;

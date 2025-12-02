@@ -1,6 +1,24 @@
 // ExtractionEngine.cs
 // CloudCore PDF→Rooms extraction engine with PdfPig (text) and PDFium Native (boundaries) support.
 
+// TODO: Planned Refactor
+// This class serves as a functional baseline. Future refactoring should:
+// 1. Break the engine into smaller, focused components:
+//    - Input parsing (PDF stream handling, document loading)
+//    - Geometry processing (path extraction, point manipulation)
+//    - Polygonization (gap bridging, polygon reconstruction)
+//    - Filtering (path filtering, statistics generation)
+//    - Label matching (text extraction, room label matching)
+// 2. Isolate PDFium and NTS-specific implementations behind clearer internal abstractions:
+//    - Create interfaces/abstractions for PDF parsing (IPdfParser, IPathExtractor)
+//    - Create interfaces/abstractions for geometry operations (IPolygonizer, IGapBridger)
+//    - Allow swapping implementations without changing the core extraction logic
+// 3. Trim dead code and experimental branches:
+//    - Remove unused methods (e.g., ExtractRoomBoundariesWithPDFiumSharp placeholder)
+//    - Remove or consolidate duplicate functionality
+//    - Remove commented-out code and experimental branches that won't be supported
+// See separate issue for tracking this refactor.
+
 using System;
 using System.IO;
 using System.Linq;
@@ -1214,6 +1232,11 @@ namespace JSBA.CloudCore.Extractor
         #endregion
 
         #region Settings and Filtering
+
+        // NOTE: The filtering and statistics features are intended to support later statistics
+        // analysis and ML (machine learning) analysis. The path statistics, line width distributions,
+        // and filtering capabilities are designed to enable data-driven improvements to extraction
+        // algorithms and quality assessment.
 
         /// <summary>
         /// Analyze path distributions and generate statistics
