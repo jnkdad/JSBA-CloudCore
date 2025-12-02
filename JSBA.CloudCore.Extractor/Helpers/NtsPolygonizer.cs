@@ -4,7 +4,7 @@ using NetTopologySuite.Geometries;
 using NetTopologySuite.Operation.Polygonize;
 using NetTopologySuite.Operation.Buffer;
 
-namespace JSBA.CloudCore.Extractor;
+namespace JSBA.CloudCore.Extractor.Helpers;
 
 /// <summary>
 /// Uses NetTopologySuite for robust polygon reconstruction from line segments
@@ -68,29 +68,29 @@ public class NtsPolygonizer
         if (gapTolerance <= 0 || paths.Count == 0)
             return paths;
 
-        _logger.LogInformation("NTS: Bridging gaps with tolerance {Tolerance} for {Count} paths", 
+        _logger.LogInformation("NTS: Bridging gaps with tolerance {Tolerance} for {Count} paths",
             gapTolerance, paths.Count);
 
         try
         {
             // Convert paths to NTS LineStrings
             var lineStrings = paths.Select(ToLineString).ToList();
-            
+
             // Create a MultiLineString
             var multiLineString = _geometryFactory.CreateMultiLineString(lineStrings.ToArray());
-            
+
             // Union all lines (this merges connected segments)
             var merged = multiLineString.Union();
-            
+
             _logger.LogInformation("NTS: Gap bridging complete. Result type: {Type}", merged.GeometryType);
-            
+
             // Convert back to RawPaths
             var result = new List<RawPath>();
             ExtractLineStrings(merged, result, paths.FirstOrDefault()?.LineWidth ?? 1.0);
-            
-            _logger.LogInformation("NTS: Gap bridging: {Original} → {Merged} paths", 
+
+            _logger.LogInformation("NTS: Gap bridging: {Original} → {Merged} paths",
                 paths.Count, result.Count);
-            
+
             return result;
         }
         catch (Exception ex)
@@ -143,17 +143,17 @@ public class NtsPolygonizer
             // Use NTS Polygonizer to find all closed polygons
             var polygonizer = new Polygonizer();
             polygonizer.Add(lineStrings.Cast<Geometry>().ToList());
-            
+
             var polygons = polygonizer.GetPolygons();
-            
+
             _logger.LogInformation("NTS: Found {Count} polygons", polygons.Count);
-            
+
             // Convert to RoomBoundary
             var result = polygons
                 .Cast<Polygon>()
                 .Select(ToRoomBoundary)
                 .ToList();
-            
+
             return result;
         }
         catch (Exception ex)

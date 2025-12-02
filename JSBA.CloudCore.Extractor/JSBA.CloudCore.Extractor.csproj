@@ -16,9 +16,16 @@
     <None Include="pdfium.dll" Condition="Exists('pdfium.dll')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Include="extraction-settings.json">
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="ExtractorSettings\extraction-settings.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="ExtractorData\" />
   </ItemGroup>
 
   <PropertyGroup>

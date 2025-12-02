@@ -30,22 +30,6 @@ namespace JSBA.CloudCore.Extractor
         {
             return _engine.ProcessPdfToRooms(pdfStream, options);
         }
-
-        /// <summary>
-        /// Compare different boundary extraction methods (for testing/diagnostics)
-        /// </summary>
-        public BoundaryComparisonResult CompareBoundaryExtractionMethods(Stream pdfStream)
-        {
-            return _engine.CompareBoundaryExtractionMethods(pdfStream);
-        }
-
-        /// <summary>
-        /// Compare different text extraction methods (for testing/diagnostics)
-        /// </summary>
-        public TextComparisonResult CompareTextExtractionMethods(Stream pdfStream)
-        {
-            return _engine.CompareTextExtractionMethods(pdfStream);
-        }
     }
 }
 

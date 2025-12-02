@@ -18,20 +18,6 @@ namespace JSBA.CloudCore.Contracts.Interfaces
         /// <param name="options">Extraction options</param>
         /// <returns>Extraction result with rooms and metadata</returns>
         RoomsResult ProcessPdfToRooms(Stream pdfStream, PdfOptions options);
-
-        /// <summary>
-        /// Compare different boundary extraction methods (for testing/diagnostics)
-        /// </summary>
-        /// <param name="pdfStream">PDF file stream</param>
-        /// <returns>Comparison result showing boundaries from different methods</returns>
-        BoundaryComparisonResult CompareBoundaryExtractionMethods(Stream pdfStream);
-
-        /// <summary>
-        /// Compare different text extraction methods (for testing/diagnostics)
-        /// </summary>
-        /// <param name="pdfStream">PDF file stream</param>
-        /// <returns>Comparison result showing text labels from different methods</returns>
-        TextComparisonResult CompareTextExtractionMethods(Stream pdfStream);
     }
 }
 

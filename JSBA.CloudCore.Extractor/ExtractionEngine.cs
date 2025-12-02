@@ -10,6 +10,7 @@ using JSBA.CloudCore.Contracts.Models;
 using Microsoft.Extensions.Logging;
 using PdfPig = UglyToad.PdfPig;
 using UglyToad.PdfPig.Content;
+using JSBA.CloudCore.Extractor.Helpers;
 
 namespace JSBA.CloudCore.Extractor
 {

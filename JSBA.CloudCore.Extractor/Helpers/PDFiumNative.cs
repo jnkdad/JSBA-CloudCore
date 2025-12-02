@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace JSBA.CloudCore.Extractor;
+namespace JSBA.CloudCore.Extractor.Helpers;
 
 /// <summary>
 /// Native P/Invoke bindings for PDFium library
@@ -23,13 +23,13 @@ public static class PDFiumNative
     #region Document Functions
 
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-    public static extern IntPtr FPDF_LoadMemDocument(byte[] data_buf, int size, string password);
+    public static extern nint FPDF_LoadMemDocument(byte[] data_buf, int size, string password);
 
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-    public static extern void FPDF_CloseDocument(IntPtr document);
+    public static extern void FPDF_CloseDocument(nint document);
 
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-    public static extern int FPDF_GetPageCount(IntPtr document);
+    public static extern int FPDF_GetPageCount(nint document);
 
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
     public static extern uint FPDF_GetLastError();
@@ -39,55 +39,55 @@ public static class PDFiumNative
     #region Page Functions
 
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-    public static extern IntPtr FPDF_LoadPage(IntPtr document, int page_index);
+    public static extern nint FPDF_LoadPage(nint document, int page_index);
 
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-    public static extern void FPDF_ClosePage(IntPtr page);
+    public static extern void FPDF_ClosePage(nint page);
 
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-    public static extern double FPDF_GetPageWidth(IntPtr page);
+    public static extern double FPDF_GetPageWidth(nint page);
 
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-    public static extern double FPDF_GetPageHeight(IntPtr page);
+    public static extern double FPDF_GetPageHeight(nint page);
 
     #endregion
 
     #region Page Object Functions
 
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-    public static extern int FPDFPage_CountObjects(IntPtr page);
+    public static extern int FPDFPage_CountObjects(nint page);
 
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-    public static extern IntPtr FPDFPage_GetObject(IntPtr page, int index);
+    public static extern nint FPDFPage_GetObject(nint page, int index);
 
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-    public static extern int FPDFPageObj_GetType(IntPtr page_object);
+    public static extern int FPDFPageObj_GetType(nint page_object);
 
     /// <summary>
     /// Get the bounding box of a page object
     /// Returns true on success, false on failure
     /// </summary>
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-    public static extern bool FPDFPageObj_GetBounds(IntPtr page_object, out float left, out float bottom, out float right, out float top);
+    public static extern bool FPDFPageObj_GetBounds(nint page_object, out float left, out float bottom, out float right, out float top);
 
     #endregion
 
     #region Path Object Functions
 
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-    public static extern int FPDFPath_CountSegments(IntPtr path);
+    public static extern int FPDFPath_CountSegments(nint path);
 
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-    public static extern IntPtr FPDFPath_GetPathSegment(IntPtr path, int index);
+    public static extern nint FPDFPath_GetPathSegment(nint path, int index);
 
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-    public static extern bool FPDFPathSegment_GetPoint(IntPtr segment, out float x, out float y);
+    public static extern bool FPDFPathSegment_GetPoint(nint segment, out float x, out float y);
 
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-    public static extern int FPDFPathSegment_GetType(IntPtr segment);
+    public static extern int FPDFPathSegment_GetType(nint segment);
 
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-    public static extern bool FPDFPathSegment_GetClose(IntPtr segment);
+    public static extern bool FPDFPathSegment_GetClose(nint segment);
 
     /// <summary>
     /// Get the drawing mode of a path object
@@ -96,14 +96,14 @@ public static class PDFiumNative
     /// Returns true on success
     /// </summary>
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-    public static extern bool FPDFPath_GetDrawMode(IntPtr path, out int fillmode, out bool stroke);
+    public static extern bool FPDFPath_GetDrawMode(nint path, out int fillmode, out bool stroke);
 
     /// <summary>
     /// Get the stroke width of a page object
     /// Returns true on success
     /// </summary>
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-    public static extern bool FPDFPageObj_GetStrokeWidth(IntPtr pageObject, out float width);
+    public static extern bool FPDFPageObj_GetStrokeWidth(nint pageObject, out float width);
 
     #endregion
 
@@ -114,32 +114,32 @@ public static class PDFiumNative
     /// Returns a handle to the text page information structure
     /// </summary>
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-    public static extern IntPtr FPDFText_LoadPage(IntPtr page);
+    public static extern nint FPDFText_LoadPage(nint page);
 
     /// <summary>
     /// Release all resources allocated for a text page information structure
     /// </summary>
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-    public static extern void FPDFText_ClosePage(IntPtr text_page);
+    public static extern void FPDFText_ClosePage(nint text_page);
 
     /// <summary>
     /// Get number of characters in a page
     /// </summary>
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-    public static extern int FPDFText_CountChars(IntPtr text_page);
+    public static extern int FPDFText_CountChars(nint text_page);
 
     /// <summary>
     /// Get Unicode of a character in a page
     /// </summary>
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-    public static extern uint FPDFText_GetUnicode(IntPtr text_page, int index);
+    public static extern uint FPDFText_GetUnicode(nint text_page, int index);
 
     /// <summary>
     /// Get bounding box of a particular character
     /// Returns true on success, false on failure
     /// </summary>
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-    public static extern bool FPDFText_GetCharBox(IntPtr text_page, int index, out double left, out double right, out double bottom, out double top);
+    public static extern bool FPDFText_GetCharBox(nint text_page, int index, out double left, out double right, out double bottom, out double top);
 
     /// <summary>
     /// Extract unicode text string from the page
@@ -149,13 +149,13 @@ public static class PDFiumNative
     /// Returns number of characters written into the buffer (including trailing zeros)
     /// </summary>
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-    public static extern int FPDFText_GetText(IntPtr text_page, int start_index, int count, [Out] byte[] buffer);
+    public static extern int FPDFText_GetText(nint text_page, int start_index, int count, [Out] byte[] buffer);
 
     /// <summary>
     /// Get font size of a particular character
     /// </summary>
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-    public static extern double FPDFText_GetFontSize(IntPtr text_page, int index);
+    public static extern double FPDFText_GetFontSize(nint text_page, int index);
 
     #endregion
 
