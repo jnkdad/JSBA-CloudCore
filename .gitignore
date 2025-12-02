@@ -22,3 +22,11 @@ TestResults/
 # Misc
 *.opendb
 *.VC.db
+
+# Native libraries (should be downloaded via setup-pdfium.ps1)
+**/pdfium.dll
+**/libpdfium.so
+**/libpdfium.dylib
+args.gn
+PDFiumConfig.cmake
+licenses/*.*
