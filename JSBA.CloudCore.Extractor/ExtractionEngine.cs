@@ -144,7 +144,7 @@ namespace JSBA.CloudCore.Extractor
             try
             {
                 // Load extraction settings (PDF-specific or default)
-                var settingsPath = Path.Combine(AppContext.BaseDirectory, "extraction-settings.json");
+                var settingsPath = Path.Combine(AppContext.BaseDirectory, "ExtractorSettings", "extraction-settings.json");
                 ExtractionSettings? settings = null;
 
                 if (File.Exists(settingsPath))
