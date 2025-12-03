@@ -3,18 +3,10 @@
 // These are not part of the public API contract
 
 using System.Collections.Generic;
+using JSBA.CloudCore.Contracts.Models;
 
 namespace JSBA.CloudCore.Extractor
 {
-    /// <summary>
-    /// Internal 2D point representation (not part of public API)
-    /// External parties should use PointDto from Contracts
-    /// </summary>
-    public class Point2D
-    {
-        public double X { get; set; }
-        public double Y { get; set; }
-    }
 
     /// <summary>
     /// Room label extracted from PDF text (internal use)

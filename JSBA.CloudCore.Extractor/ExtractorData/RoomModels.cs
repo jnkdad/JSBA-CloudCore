@@ -3,7 +3,7 @@
 // These are not part of the public API contract
 
 using System.Collections.Generic;
-using JSBA.CloudCore.Contracts.Models; // For RoomsMetadata
+using JSBA.CloudCore.Contracts.Models; // For RoomsMetadata and Point2D
 
 namespace JSBA.CloudCore.Extractor
 {

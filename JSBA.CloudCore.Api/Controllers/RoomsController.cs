@@ -4,8 +4,10 @@
 using Microsoft.AspNetCore.Mvc;
 using JSBA.CloudCore.Contracts.Models;
 using JSBA.CloudCore.Contracts.Interfaces;
+using JSBA.CloudCore.Contracts.Exceptions;
 using System;
 using System.IO;
+using System.Linq;
 
 namespace JSBA.CloudCore.Api.Controllers
 {
@@ -36,15 +38,28 @@ namespace JSBA.CloudCore.Api.Controllers
         [ProducesResponseType(typeof(ErrorResponseDto), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ErrorResponseDto), StatusCodes.Status500InternalServerError)]
         public IActionResult ExtractRooms(
-            IFormFile file, 
+            IFormFile? file, 
             [FromForm] int? pageIndex = null,
             [FromForm] string? unitsHint = null,
             [FromForm] string? projectId = null)
         {
+            // Handle missing file before model validation
+            if (file == null)
+            {
+                return BadRequest(new ErrorResponseDto
+                {
+                    Error = new ErrorInfoDto
+                    {
+                        Code = "MISSING_FILE",
+                        Message = "No PDF file provided or file is empty."
+                    }
+                });
+            }
+
             try
             {
-                // Validate file
-                if (file == null || file.Length == 0)
+                // Validate file - check if it's empty
+                if (file.Length == 0)
                 {
                     return BadRequest(new ErrorResponseDto
                     {
@@ -88,6 +103,18 @@ namespace JSBA.CloudCore.Api.Controllers
 
                 return Ok(result);
             }
+            catch (PdfExtractionException ex)
+            {
+                _logger.LogError(ex, "PDF extraction error: {ErrorCode}", ex.ErrorCode);
+                return StatusCode(StatusCodes.Status500InternalServerError, new ErrorResponseDto
+                {
+                    Error = new ErrorInfoDto
+                    {
+                        Code = ex.ErrorCode,
+                        Message = ex.Message
+                    }
+                });
+            }
             catch (NotImplementedException)
             {
                 _logger.LogWarning("PDF extraction not yet implemented");
@@ -102,33 +129,13 @@ namespace JSBA.CloudCore.Api.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error processing PDF file");
-                
-                // Determine error code based on exception type
-                string errorCode = "EXTRACTION_FAILED";
-                string errorMessage = "An internal error occurred while processing the PDF.";
-                
-                // Check if it's a PDF parsing error
-                if (ex.Message.Contains("PDF", StringComparison.OrdinalIgnoreCase) || 
-                    ex.Message.Contains("parse", StringComparison.OrdinalIgnoreCase) ||
-                    ex.Message.Contains("invalid", StringComparison.OrdinalIgnoreCase))
-                {
-                    errorCode = "INVALID_PDF";
-                    errorMessage = "The uploaded file could not be parsed as a PDF document.";
-                }
-                else if (ex.Message.Contains("format", StringComparison.OrdinalIgnoreCase) ||
-                         ex.Message.Contains("unsupported", StringComparison.OrdinalIgnoreCase))
-                {
-                    errorCode = "UNSUPPORTED_FORMAT";
-                    errorMessage = "The PDF contains an unsupported structure or format.";
-                }
-
+                _logger.LogError(ex, "Unexpected error processing PDF file");
                 return StatusCode(StatusCodes.Status500InternalServerError, new ErrorResponseDto
                 {
                     Error = new ErrorInfoDto
                     {
-                        Code = errorCode,
-                        Message = errorMessage
+                        Code = "EXTRACTION_FAILED",
+                        Message = "An internal error occurred while processing the PDF."
                     }
                 });
             }

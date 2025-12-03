@@ -7,7 +7,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 using JSBA.CloudCore.Contracts.Models;
-using JSBA.CloudCore.Extractor.Helpers;
 using NetTopologySuite.Geometries;
 
 namespace JSBA.CloudCore.Extractor
@@ -65,7 +64,7 @@ namespace JSBA.CloudCore.Extractor
                 Perimeter = perimeter,
                 CeilingHeight = null, // Not available from extraction
                 BoundingBox = boundingBox,
-                Polygon = polygon.Select(p => new Point2DDto { X = p.X, Y = p.Y }).ToList(),
+                Polygon = polygon.Select(p => new Point2D { X = p.X, Y = p.Y }).ToList(),
                 Metadata = metadata.Count > 0 ? metadata : null
             };
         }

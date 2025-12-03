@@ -82,10 +82,10 @@ namespace JSBA.CloudCore.Contracts.Models
         /// </summary>
         public BoundingBox2DDto? BoundingBox { get; set; }
 
-        /// <summary>
-        /// Plan-view boundary polygon, ordered vertex list
-        /// </summary>
-        public List<Point2DDto> Polygon { get; set; } = new();
+    /// <summary>
+    /// Plan-view boundary polygon, ordered vertex list
+    /// </summary>
+    public List<Point2D> Polygon { get; set; } = new();
 
         /// <summary>
         /// Additional metadata (confidence, pdfLayer, etc.)
@@ -107,17 +107,10 @@ namespace JSBA.CloudCore.Contracts.Models
     /// <summary>
     /// Point in 2D space (RIMJSON v0.3)
     /// </summary>
-    public class Point2DDto
+    public class Point2D
     {
         public double X { get; set; }
         public double Y { get; set; }
-    }
-
-    /// <summary>
-    /// Point DTO (legacy name for backward compatibility)
-    /// </summary>
-    public class PointDto : Point2DDto
-    {
     }
 
     /// <summary>
