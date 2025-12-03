@@ -24,13 +24,14 @@ namespace JSBA.CloudCore.Api.Controllers
 
         /// <summary>
         /// Uploads a PDF floor plan and returns extracted room geometry
+        /// Returns RoomExchange DTO format
         /// </summary>
         /// <param name="file">PDF floor plan file</param>
         /// <param name="options">Optional JSON string for future configuration</param>
-        /// <returns>Room extraction results</returns>
+        /// <returns>Room extraction results in   RoomExchange format</returns>
         [HttpPost("extract")]
         [Consumes("multipart/form-data")]
-        [ProducesResponseType(typeof(RoomsResult), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(RoomsResponseDto), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public IActionResult ExtractRooms(IFormFile file, [FromForm] string? options = null)
@@ -51,7 +52,7 @@ namespace JSBA.CloudCore.Api.Controllers
 
                 _logger.LogInformation("Processing PDF file: {FileName}, Size: {Size} bytes", file.FileName, file.Length);
 
-                // Process the PDF
+                // Process the PDF (returns RoomExchange DTO)
                 using var stream = file.OpenReadStream();
                 var pdfOptions = new PdfOptions
                 {

@@ -3,10 +3,46 @@
 // These are not part of the public API contract
 
 using System.Collections.Generic;
-using JSBA.CloudCore.Contracts.Models;
 
 namespace JSBA.CloudCore.Extractor
 {
+    /// <summary>
+    /// Internal 2D point representation (not part of public API)
+    /// External parties should use PointDto from Contracts
+    /// </summary>
+    public class Point2D
+    {
+        public double X { get; set; }
+        public double Y { get; set; }
+    }
+
+    /// <summary>
+    /// Room label extracted from PDF text (internal use)
+    /// </summary>
+    public class RoomLabel
+    {
+        public string Text { get; set; } = string.Empty;
+        public double CenterX { get; set; }
+        public double CenterY { get; set; }
+    }
+
+    /// <summary>
+    /// Comparison result for boundary extraction methods (diagnostic/testing only)
+    /// </summary>
+    public class BoundaryComparisonResult
+    {
+        public List<List<Point2D>> PdfPigBoundaries { get; set; } = new();
+        public List<List<Point2D>> PDFiumNativeBoundaries { get; set; } = new();
+    }
+
+    /// <summary>
+    /// Comparison result for text extraction methods (diagnostic/testing only)
+    /// </summary>
+    public class TextComparisonResult
+    {
+        public List<RoomLabel> PdfPigLabels { get; set; } = new();
+        public List<RoomLabel> PDFiumNativeLabels { get; set; } = new();
+    }
     /// <summary>
     /// Represents a raw path extracted from PDF (for debugging and visualization)
     /// </summary>

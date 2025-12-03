@@ -1,29 +1,14 @@
 // RoomModels.cs
 // Data models for the CloudCore PDF→Rooms extraction engine.
+// Public API contract - only models used by external parties
 
 using System.Collections.Generic;
 
 namespace JSBA.CloudCore.Contracts.Models
 {
-    public class RoomsResult
-    {
-        public List<RoomModel> Rooms { get; set; } = new();
-        public RoomsMetadata Metadata { get; set; } = new();
-    }
-
-    public class RoomModel
-    {
-        public string Id { get; set; } = string.Empty;
-        public string? Name { get; set; }
-        public List<Point2D> Polygon { get; set; } = new();
-    }
-
-    public class Point2D
-    {
-        public double X { get; set; }
-        public double Y { get; set; }
-    }
-
+    /// <summary>
+    /// Metadata about the extraction result
+    /// </summary>
     public class RoomsMetadata
     {
         public string Units { get; set; } = "feet";
@@ -31,6 +16,9 @@ namespace JSBA.CloudCore.Contracts.Models
         public int PageCount { get; set; } = 1;
     }
 
+    /// <summary>
+    /// Options for PDF extraction
+    /// </summary>
     public class PdfOptions
     {
         /// <summary>
@@ -40,24 +28,4 @@ namespace JSBA.CloudCore.Contracts.Models
 
         // placeholder for future configuration (page index, tolerances, etc.)
     }
-
-    public class BoundaryComparisonResult
-    {
-        public List<List<Point2D>> PdfPigBoundaries { get; set; } = new();
-        public List<List<Point2D>> PDFiumNativeBoundaries { get; set; } = new();
-    }
-
-    public class TextComparisonResult
-    {
-        public List<RoomLabel> PdfPigLabels { get; set; } = new();
-        public List<RoomLabel> PDFiumNativeLabels { get; set; } = new();
-    }
-
-    public class RoomLabel
-    {
-        public string Text { get; set; } = string.Empty;
-        public double CenterX { get; set; }
-        public double CenterY { get; set; }
-    }
-
 }

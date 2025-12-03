@@ -16,8 +16,8 @@ namespace JSBA.CloudCore.Contracts.Interfaces
         /// </summary>
         /// <param name="pdfStream">PDF file stream</param>
         /// <param name="options">Extraction options</param>
-        /// <returns>Extraction result with rooms and metadata</returns>
-        RoomsResult ProcessPdfToRooms(Stream pdfStream, PdfOptions options);
+        /// <returns>RoomExchange response with rooms</returns>
+        RoomsResponseDto ProcessPdfToRooms(Stream pdfStream, PdfOptions options);
     }
 }
 

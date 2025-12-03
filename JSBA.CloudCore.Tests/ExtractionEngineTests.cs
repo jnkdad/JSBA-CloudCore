@@ -42,8 +42,9 @@ namespace JSBA.CloudCore.Tests
 
             using var stream = File.OpenRead(testPdfPath);
             var options = new PdfOptions();
+            options.FileName = testPdfPath;
 
-            // Act
+            // Act - Testing internal ExtractionEngine (returns internal RoomsResult)
             var result = _engine.ProcessPdfToRooms(stream, options);
 
             // Assert
@@ -85,6 +86,7 @@ namespace JSBA.CloudCore.Tests
             var testPdfPath = FindTestPdf("Project3_onlywall.pdf");
             using var stream = File.OpenRead(testPdfPath);
             var options = new PdfOptions();
+            options.FileName = testPdfPath;
 
             // Act
             var result = _engine.ProcessPdfToRooms(stream, options);
@@ -107,6 +109,7 @@ namespace JSBA.CloudCore.Tests
             var testPdfPath = FindTestPdf("Project3_onlywall.pdf");
             using var stream = File.OpenRead(testPdfPath);
             var options = new PdfOptions();
+            options.FileName = testPdfPath;
 
             // Act
             var result = _engine.ProcessPdfToRooms(stream, options);
