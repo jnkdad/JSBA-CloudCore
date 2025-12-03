@@ -162,26 +162,19 @@ namespace JSBA.CloudCore.Extractor
             try
             {
                 // Load extraction settings (PDF-specific or default)
-                var settingsPath = Path.Combine(AppContext.BaseDirectory, "ExtractorSettings", "extraction-settings.json");
                 ExtractionSettings? settings = null;
 
-                if (File.Exists(settingsPath))
+                if (!string.IsNullOrWhiteSpace(pdfFileName))
                 {
-                    if (!string.IsNullOrWhiteSpace(pdfFileName))
-                    {
-                        // Load PDF-specific settings
-                        settings = LoadSettingsForPdf(settingsPath, pdfFileName);
-                    }
-                    else
-                    {
-                        // Load default settings
-                        settings = LoadSettings(settingsPath);
-                        _logger.LogInformation("Loaded default extraction settings from {Path}", settingsPath);
-                    }
+                    // Load PDF-specific settings (settingsPath will default if not provided)
+                    settings = LoadSettingsForPdf(pdfFileName);
                 }
                 else
                 {
-                    _logger.LogWarning("Settings file not found at {Path}, using default extraction", settingsPath);
+                    // Load default settings
+                    var settingsPath = Path.Combine(AppContext.BaseDirectory, "ExtractorSettings", "extraction-settings.json");
+                    settings = LoadSettings(settingsPath);
+                    _logger.LogInformation("Loaded default extraction settings from {Path}", settingsPath);
                 }
 
                 // Step 1: Extract text labels using PdfPig
@@ -1379,31 +1372,8 @@ namespace JSBA.CloudCore.Extractor
         /// </summary>
         public ExtractionSettingsCollection LoadSettingsCollection(string settingsPath)
         {
-            try
-            {
-                if (!File.Exists(settingsPath))
-                {
-                    _logger.LogWarning("Settings file not found: {Path}. Using default settings.", settingsPath);
-                    return new ExtractionSettingsCollection();
-                }
-
-                string json = File.ReadAllText(settingsPath);
-                var settingsCollection = JsonSerializer.Deserialize<ExtractionSettingsCollection>(json, new JsonSerializerOptions
-                {
-                    PropertyNameCaseInsensitive = true
-                });
-
-                _logger.LogInformation("Loaded extraction settings collection from {Path}", settingsPath);
-                _logger.LogInformation("Settings collection contains {Count} PDF-specific configurations",
-                    settingsCollection?.PdfTypes?.Count ?? 0);
-
-                return settingsCollection ?? new ExtractionSettingsCollection();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error loading settings from {Path}. Using default settings.", settingsPath);
-                return new ExtractionSettingsCollection();
-            }
+            var manager = ExtractionSettingsManager.Instance;
+            return manager.GetCollection(settingsPath);
         }
 
         /// <summary>
@@ -1411,25 +1381,27 @@ namespace JSBA.CloudCore.Extractor
         /// </summary>
         public ExtractionSettings LoadSettings(string settingsPath)
         {
-            var collection = LoadSettingsCollection(settingsPath);
+            var manager = ExtractionSettingsManager.Instance;
+            var collection = manager.GetCollection(settingsPath);
             return collection.Default;
         }
 
         /// <summary>
         /// Load extraction settings for a specific PDF file
         /// </summary>
-        /// <param name="settingsPath">Path to the settings JSON file</param>
+        /// <param name="settingsPath">Path to the settings JSON file. If null or empty, defaults to "ExtractorSettings/extraction-settings.json" in the base directory.</param>
         /// <param name="pdfFileName">PDF filename (e.g., "Project3_onlywall.pdf")</param>
         /// <returns>Settings for the PDF or default settings</returns>
-        public ExtractionSettings LoadSettingsForPdf(string settingsPath, string pdfFileName)
+        public ExtractionSettings LoadSettingsForPdf(string pdfFileName)
         {
-            var collection = LoadSettingsCollection(settingsPath);
-            var settings = collection.GetSettingsForPdf(pdfFileName);
+            var manager = ExtractionSettingsManager.Instance;
+            var settings = manager.GetSettingsForPdf(pdfFileName);
 
             // Check if PDF-specific settings were found (check both full name and filename only)
-            var normalizedName = pdfFileName.ToLowerInvariant();
-            var fileNameOnly = Path.GetFileName(normalizedName);
-            bool hasPdfSpecificSettings = collection.PdfTypes.ContainsKey(normalizedName) ||
+            // Dictionary is case-insensitive, so no need to normalize
+            var collection = manager.GetCollection(); // Use default settings path
+            var fileNameOnly = Path.GetFileName(pdfFileName);
+            bool hasPdfSpecificSettings = collection.PdfTypes.ContainsKey(pdfFileName) ||
                                          collection.PdfTypes.ContainsKey(fileNameOnly);
 
             _logger.LogInformation("Loaded settings for PDF '{PdfName}': Using {SettingsType} settings",
@@ -1475,19 +1447,22 @@ namespace JSBA.CloudCore.Extractor
         {
             try
             {
+                var manager = ExtractionSettingsManager.Instance;
+                
                 // Load existing collection or create new one
                 var collection = File.Exists(settingsPath)
-                    ? LoadSettingsCollection(settingsPath)
+                    ? manager.GetCollection(settingsPath)
                     : new ExtractionSettingsCollection();
 
-                // Normalize filename to lowercase
-                var normalizedName = pdfFileName.ToLowerInvariant();
-
+                // Dictionary is case-insensitive, so no need to normalize
                 // Update or add settings for this PDF
-                collection.PdfTypes[normalizedName] = settings;
+                collection.PdfTypes[pdfFileName] = settings;
 
                 // Save the updated collection
                 SaveSettingsCollection(settingsPath, collection);
+
+                // Clear cache so next access will reload
+                manager.ClearCache();
 
                 _logger.LogInformation("Saved settings for PDF '{PdfName}' to {Path}", pdfFileName, settingsPath);
             }

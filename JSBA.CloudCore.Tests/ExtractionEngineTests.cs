@@ -54,7 +54,8 @@ namespace JSBA.CloudCore.Tests
             Assert.True(result.Metadata.PageCount > 0, "PDF should have at least one page");
         }
 
-        [Fact(Skip = "In progress with NTS reconstruction")]
+        //[Fact(Skip = "In progress with NTS reconstruction")]
+        [Fact]
         public void ProcessPdfToRooms_WithRoomTagPdf_ExtractsRooms()
         {
             // Arrange
@@ -487,14 +488,16 @@ namespace JSBA.CloudCore.Tests
             // Arrange - Use a more complex PDF
             //var testPdfPath = FindTestPdf("Project3_onlywall.pdf");
             //var testPdfPath = FindTestPdf("Project3_doorwindow.pdf");
-            var testPdfPath = FindTestPdf("EA-151c - REFLECTED CEILING PLAN - FIRST FLOOR LEVEL AREA c.pdf");
+            var testPdfPath = FindTestPdf("Project3_roomtag.pdf");
+
+            //var testPdfPath = FindTestPdf("EA-151c - REFLECTED CEILING PLAN - FIRST FLOOR LEVEL AREA c.pdf");
             if (!File.Exists(testPdfPath))
             {
                 Console.WriteLine($"Test PDF not found: {testPdfPath}. Skipping test.");
                 return;
             }
-            var settingsPath = Path.Combine(AppContext.BaseDirectory, "extraction-settings.json");
-            var settings = _engine.LoadSettingsForPdf(settingsPath, testPdfPath);
+            // settingsPath defaults to standard location if not provided
+            var settings = _engine.LoadSettingsForPdf(testPdfPath);
             using var stream = File.OpenRead(testPdfPath);
 
             // Act - Extract boundaries (this populates AllPaths and ClosedPolygons)
