@@ -23,41 +23,65 @@ namespace JSBA.CloudCore.Api.Controllers
         }
 
         /// <summary>
-        /// Uploads a PDF floor plan and returns extracted room geometry
-        /// Returns RoomExchange DTO format
+        /// Uploads a PDF floor plan and returns extracted room geometry (RIMJSON v0.3)
         /// </summary>
         /// <param name="file">PDF floor plan file</param>
-        /// <param name="options">Optional JSON string for future configuration</param>
-        /// <returns>Room extraction results in   RoomExchange format</returns>
+        /// <param name="pageIndex">Page index (default: 0)</param>
+        /// <param name="unitsHint">Units hint: "feet" or "meters" (default: "feet")</param>
+        /// <param name="projectId">Project identifier for tracking</param>
+        /// <returns>Room extraction results in RIMJSON v0.3 format</returns>
         [HttpPost("extract")]
         [Consumes("multipart/form-data")]
         [ProducesResponseType(typeof(RoomsResponseDto), StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        public IActionResult ExtractRooms(IFormFile file, [FromForm] string? options = null)
+        [ProducesResponseType(typeof(ErrorResponseDto), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ErrorResponseDto), StatusCodes.Status500InternalServerError)]
+        public IActionResult ExtractRooms(
+            IFormFile file, 
+            [FromForm] int? pageIndex = null,
+            [FromForm] string? unitsHint = null,
+            [FromForm] string? projectId = null)
         {
             try
             {
                 // Validate file
                 if (file == null || file.Length == 0)
                 {
-                    return BadRequest(new { error = "No file uploaded or file is empty" });
+                    return BadRequest(new ErrorResponseDto
+                    {
+                        Error = new ErrorInfoDto
+                        {
+                            Code = "MISSING_FILE",
+                            Message = "No PDF file provided or file is empty."
+                        }
+                    });
                 }
 
                 // Validate file type
                 if (!file.FileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
                 {
-                    return BadRequest(new { error = "Invalid file type. Only PDF files are supported." });
+                    return BadRequest(new ErrorResponseDto
+                    {
+                        Error = new ErrorInfoDto
+                        {
+                            Code = "INVALID_PDF",
+                            Message = "The uploaded file is not a valid PDF document."
+                        }
+                    });
                 }
 
-                _logger.LogInformation("Processing PDF file: {FileName}, Size: {Size} bytes", file.FileName, file.Length);
+                _logger.LogInformation("Processing PDF file: {FileName}, Size: {Size} bytes, PageIndex: {PageIndex}, Units: {Units}", 
+                    file.FileName, file.Length, pageIndex ?? 0, unitsHint ?? "feet");
 
-                // Process the PDF (returns RoomExchange DTO)
+                // Process the PDF (returns RIMJSON v0.3 DTO)
                 using var stream = file.OpenReadStream();
                 var pdfOptions = new PdfOptions
                 {
-                    FileName = file.FileName // Pass filename for PDF-specific settings lookup
+                    FileName = file.FileName,
+                    PageIndex = pageIndex,
+                    UnitsHint = unitsHint,
+                    ProjectId = projectId
                 };
+                
                 var result = _pdfExtractor.ProcessPdfToRooms(stream, pdfOptions);
 
                 _logger.LogInformation("Successfully extracted {RoomCount} rooms from {FileName}", result.Rooms.Count, file.FileName);
@@ -67,12 +91,46 @@ namespace JSBA.CloudCore.Api.Controllers
             catch (NotImplementedException)
             {
                 _logger.LogWarning("PDF extraction not yet implemented");
-                return StatusCode(StatusCodes.Status501NotImplemented, new { error = "PDF extraction not yet fully implemented" });
+                return StatusCode(StatusCodes.Status501NotImplemented, new ErrorResponseDto
+                {
+                    Error = new ErrorInfoDto
+                    {
+                        Code = "EXTRACTION_FAILED",
+                        Message = "PDF extraction not yet fully implemented."
+                    }
+                });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error processing PDF file");
-                return StatusCode(StatusCodes.Status500InternalServerError, new { error = "An error occurred while processing the PDF", details = ex.Message });
+                
+                // Determine error code based on exception type
+                string errorCode = "EXTRACTION_FAILED";
+                string errorMessage = "An internal error occurred while processing the PDF.";
+                
+                // Check if it's a PDF parsing error
+                if (ex.Message.Contains("PDF", StringComparison.OrdinalIgnoreCase) || 
+                    ex.Message.Contains("parse", StringComparison.OrdinalIgnoreCase) ||
+                    ex.Message.Contains("invalid", StringComparison.OrdinalIgnoreCase))
+                {
+                    errorCode = "INVALID_PDF";
+                    errorMessage = "The uploaded file could not be parsed as a PDF document.";
+                }
+                else if (ex.Message.Contains("format", StringComparison.OrdinalIgnoreCase) ||
+                         ex.Message.Contains("unsupported", StringComparison.OrdinalIgnoreCase))
+                {
+                    errorCode = "UNSUPPORTED_FORMAT";
+                    errorMessage = "The PDF contains an unsupported structure or format.";
+                }
+
+                return StatusCode(StatusCodes.Status500InternalServerError, new ErrorResponseDto
+                {
+                    Error = new ErrorInfoDto
+                    {
+                        Code = errorCode,
+                        Message = errorMessage
+                    }
+                });
             }
         }
 

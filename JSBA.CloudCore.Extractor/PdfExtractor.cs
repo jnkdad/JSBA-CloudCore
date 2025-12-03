@@ -25,15 +25,19 @@ namespace JSBA.CloudCore.Extractor
 
         /// <summary>
         /// Extract rooms from a PDF stream
-        /// Maps internal models to RoomExchange DTOs
+        /// Maps internal models to RoomExchange DTOs (RIMJSON v0.3)
         /// </summary>
         public RoomsResponseDto ProcessPdfToRooms(Stream pdfStream, PdfOptions options)
         {
             // Get internal result
             var internalResult = _engine.ProcessPdfToRooms(pdfStream, options);
             
-            // Map to public DTO
-            return RoomDtoMapper.MapToResponseDto(internalResult);
+            // Map to public DTO (RIMJSON v0.3)
+            return RoomDtoMapper.MapToResponseDto(
+                internalResult, 
+                options.FileName ?? "unknown.pdf",
+                options.PageIndex ?? 0,
+                options.UnitsHint ?? "feet");
         }
     }
 }

@@ -26,6 +26,19 @@ namespace JSBA.CloudCore.Contracts.Models
         /// </summary>
         public string? FileName { get; set; }
 
-        // placeholder for future configuration (page index, tolerances, etc.)
+        /// <summary>
+        /// Page index to extract (default: 0)
+        /// </summary>
+        public int? PageIndex { get; set; }
+
+        /// <summary>
+        /// Units hint: "feet" or "meters" (default: "feet")
+        /// </summary>
+        public string? UnitsHint { get; set; }
+
+        /// <summary>
+        /// Project identifier for tracking
+        /// </summary>
+        public string? ProjectId { get; set; }
     }
 }

@@ -20,38 +20,53 @@ namespace JSBA.CloudCore.Extractor
         private static readonly GeometryFactory _geometryFactory = new GeometryFactory();
 
         /// <summary>
-        /// Map internal RoomsResult to public RoomsResponseDto
+        /// Map internal RoomsResult to public RoomsResponseDto (RIMJSON v0.3)
         /// </summary>
-        public static RoomsResponseDto MapToResponseDto(RoomsResult internalResult)
+        public static RoomsResponseDto MapToResponseDto(RoomsResult internalResult, string fileName, int pageIndex = 0, string units = "feet")
         {
             return new RoomsResponseDto
             {
+                Version = "0.3",
+                Source = new SourceInfoDto
+                {
+                    FileName = fileName,
+                    PageIndex = pageIndex,
+                    Units = units
+                },
                 Rooms = internalResult.Rooms.Select(MapToRoomDto).ToList()
             };
         }
 
         /// <summary>
-        /// Map internal RoomModel to public RoomDto
-        /// Computes Area and Centroid, extracts Number and Level
+        /// Map internal RoomModel to public RoomDto (RIMJSON v0.3)
+        /// Computes Area, Perimeter, BoundingBox, extracts Number and LevelName
         /// </summary>
         public static RoomDto MapToRoomDto(RoomModel room)
         {
             var polygon = room.Polygon;
-            var centroid = CalculateCentroid(polygon);
             var area = CalculateArea(polygon);
+            var perimeter = CalculatePerimeter(polygon);
+            var boundingBox = CalculateBoundingBox(polygon);
 
-            // Extract Number and Level from Name if possible
-            ExtractRoomInfo(room.Name, out string? number, out string? level);
+            // Extract Number and LevelName from Name if possible
+            ExtractRoomInfo(room.Name, out string? number, out string? levelName);
+
+            // Build metadata dictionary (if additional properties are available in RoomModel, add them here)
+            var metadata = new Dictionary<string, object>();
+            // Note: Confidence and PdfLayer are not currently in RoomModel, but can be added later
 
             return new RoomDto
             {
                 Id = room.Id,
                 Name = room.Name,
                 Number = number,
-                Level = level,
+                LevelName = levelName,
                 Area = area,
-                Polygon = polygon.Select(p => new PointDto { X = p.X, Y = p.Y }).ToList(),
-                Centroid = new PointDto { X = centroid.X, Y = centroid.Y }
+                Perimeter = perimeter,
+                CeilingHeight = null, // Not available from extraction
+                BoundingBox = boundingBox,
+                Polygon = polygon.Select(p => new Point2DDto { X = p.X, Y = p.Y }).ToList(),
+                Metadata = metadata.Count > 0 ? metadata : null
             };
         }
 
@@ -75,24 +90,51 @@ namespace JSBA.CloudCore.Extractor
         }
 
         /// <summary>
-        /// Calculate centroid of a polygon
+        /// Calculate perimeter of a polygon
         /// </summary>
-        private static Point2D CalculateCentroid(List<Point2D> polygon)
+        private static double CalculatePerimeter(List<Point2D> polygon)
         {
-            if (polygon.Count == 0)
-                return new Point2D { X = 0, Y = 0 };
+            if (polygon.Count < 2)
+                return 0;
 
-            double sumX = 0, sumY = 0;
-            foreach (var point in polygon)
+            double perimeter = 0;
+            for (int i = 0; i < polygon.Count; i++)
             {
-                sumX += point.X;
-                sumY += point.Y;
+                var current = polygon[i];
+                var next = polygon[(i + 1) % polygon.Count];
+                var dx = next.X - current.X;
+                var dy = next.Y - current.Y;
+                perimeter += Math.Sqrt(dx * dx + dy * dy);
             }
 
-            return new Point2D
+            return perimeter;
+        }
+
+        /// <summary>
+        /// Calculate bounding box of a polygon
+        /// </summary>
+        private static BoundingBox2DDto? CalculateBoundingBox(List<Point2D> polygon)
+        {
+            if (polygon.Count == 0)
+                return null;
+
+            double minX = polygon[0].X, minY = polygon[0].Y;
+            double maxX = polygon[0].X, maxY = polygon[0].Y;
+
+            foreach (var point in polygon)
             {
-                X = sumX / polygon.Count,
-                Y = sumY / polygon.Count
+                if (point.X < minX) minX = point.X;
+                if (point.X > maxX) maxX = point.X;
+                if (point.Y < minY) minY = point.Y;
+                if (point.Y > maxY) maxY = point.Y;
+            }
+
+            return new BoundingBox2DDto
+            {
+                MinX = minX,
+                MinY = minY,
+                MaxX = maxX,
+                MaxY = maxY
             };
         }
 
