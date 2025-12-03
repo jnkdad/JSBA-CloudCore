@@ -1,41 +1,44 @@
-using System.Collections.Generic;
-using System.Threading.Tasks;
+// ExtractorFacade.cs
+// Facade for vector PDF extraction pipeline
+// Implements IPdfExtractor interface from CloudCore.Domain
 
-namespace JSBA.CloudCore.Extractor;
+using JSBA.CloudCore.Contracts.Interfaces;
+using JSBA.CloudCore.Contracts.Models;
+using Microsoft.Extensions.Logging;
 
-public record SamplePoint(double X, double Y);
-public record SampleRoom(string Id, string Name, IReadOnlyList<SamplePoint> Polygon);
-
-public class PdfExtractor
+namespace JSBA.CloudCore.Extractor
 {
-    public Task<IReadOnlyList<SampleRoom>> GetSampleRoomsAsync()
+    /// <summary>
+    /// Facade for vector-based PDF extraction.
+    /// This is the public interface that the API layer will use.
+    /// All PDF parsing logic is encapsulated within this module.
+    /// </summary>
+    public class PdfExtractor : IPdfExtractor
     {
-        var rooms = new List<SampleRoom>
-        {
-            new(
-                Id: "01-101",
-                Name: "CLASSROOM",
-                Polygon: new List<SamplePoint>
-                {
-                    new(0, 0),
-                    new(34.46, 0),
-                    new(34.46, 27.57),
-                    new(0, 27.57)
-                }
-            ),
-            new(
-                Id: "01-102",
-                Name: "LAB",
-                Polygon: new List<SamplePoint>
-                {
-                    new(40, 0),
-                    new(70, 0),
-                    new(70, 25),
-                    new(40, 25)
-                }
-            )
-        };
+        private readonly ExtractionEngine _engine;
 
-        return Task.FromResult<IReadOnlyList<SampleRoom>>(rooms);
+        public PdfExtractor(ILogger<ExtractionEngine> logger)
+        {
+            // Create the extraction engine with the injected logger
+            _engine = new ExtractionEngine(logger);
+        }
+
+        /// <summary>
+        /// Extract rooms from a PDF stream
+        /// Maps internal models to RoomExchange DTOs (RIMJSON v0.3)
+        /// </summary>
+        public RoomsResponseDto ProcessPdfToRooms(Stream pdfStream, PdfOptions options)
+        {
+            // Get internal result
+            var internalResult = _engine.ProcessPdfToRooms(pdfStream, options);
+            
+            // Map to public DTO (RIMJSON v0.3)
+            return RoomDtoMapper.MapToResponseDto(
+                internalResult, 
+                options.FileName ?? "unknown.pdf",
+                options.PageIndex ?? 0,
+                options.UnitsHint ?? "feet");
+        }
     }
 }
+

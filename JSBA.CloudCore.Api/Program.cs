@@ -1,3 +1,4 @@
+using JSBA.CloudCore.Contracts.Interfaces;
 using JSBA.CloudCore.Extractor;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
@@ -17,7 +18,14 @@ namespace JSBA.CloudCore.Api
             builder.Services.AddControllers();          // <-- enable controllers
 
             // Register core services.
-            builder.Services.AddSingleton<PdfExtractor>();
+            //builder.Services.AddSingleton<IPdfExtractor, PdfExtractor>();
+            builder.Services.AddScoped<IPdfExtractor, PdfExtractor>();
+
+            // Configure file upload limits (50MB max)
+            builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
+            {
+                options.MultipartBodyLengthLimit = 52428800; // 50MB
+            });
 
             var app = builder.Build();
 

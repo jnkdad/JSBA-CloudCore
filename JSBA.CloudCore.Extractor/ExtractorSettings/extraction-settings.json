@@ -1,0 +1,160 @@
+{
+  "default": {
+    "filters": {
+      "lineWidth": {
+        "enabled": false,
+        "minWidth": 0.5,
+        "maxWidth": 10.0
+      },
+      "length": {
+        "enabled": true,
+        "minLength": 50.0
+      },
+      "shape": {
+        "enabled": false,
+        "allowedShapes": ["line", "rectangle"]
+      },
+      "singleSegment": {
+        "enabled": false,
+        "offset": 10.0
+      }
+    },
+    "polygon": {
+      "removeNested": false,
+      "removeOuter": true,
+      "gapTolerance": 50
+    },
+    "roomSize": {
+      "enabled": false,
+      "minRoomCount": 1,
+      "maxRoomCount": 30
+    }
+  },
+  "pdfTypes": {
+    "project3_onlywall.pdf": {
+      "filters": {
+        "lineWidth": {
+          "enabled": false,
+          "minWidth": 1.0,
+          "maxWidth": 10.0
+        },
+        "length": {
+          "enabled": false,
+          "minLength": 100.0
+        },
+        "shape": {
+          "enabled": false,
+          "allowedShapes": [ "line" ]
+        },
+        "singleSegment": {
+          "enabled": false,
+          "offset": 20.0
+        }
+      },
+      "polygon": {
+        "removeNested": false,
+        "removeOuter": true,
+        "gapTolerance": 0
+      },
+      "roomSize": {
+        "enabled": false,
+        "minRoomCount": 5,
+        "maxRoomCount": 20
+      }
+    },
+    "project3_doorwindow.pdf": {
+      "filters": {
+        "lineWidth": {
+          "enabled": false,
+          "minWidth": 0.5,
+          "maxWidth": 8.0
+        },
+        "length": {
+          "enabled": true,
+          "minLength": 20.0
+        },
+        "shape": {
+          "enabled": false,
+          "allowedShapes": [ "line", "rectangle" ]
+        },
+        "singleSegment": {
+          "enabled": false,
+          "offset": 20.0
+        }
+      },
+      "polygon": {
+        "removeNested": false,
+        "removeOuter": true,
+        "gapTolerance": 50
+      },
+      "roomSize": {
+        "enabled": false,
+        "minRoomCount": 5,
+        "maxRoomCount": 25
+      }
+    },
+    "Project3_roomtag.pdf": {
+      "filters": {
+        "lineWidth": {
+          "enabled": false,
+          "minWidth": 0.5,
+          "maxWidth": 8.0
+        },
+        "length": {
+          "enabled": true,
+          "minLength": 20.0
+        },
+        "shape": {
+          "enabled": false,
+          "allowedShapes": [ "line", "rectangle" ]
+        },
+        "singleSegment": {
+          "enabled": false,
+          "offset": 20.0
+        }
+      },
+      "polygon": {
+        "removeNested": false,
+        "removeOuter": true,
+        "gapTolerance": 0
+      },
+      "roomSize": {
+        "enabled": false,
+        "minRoomCount": 5,
+        "maxRoomCount": 25
+      }
+    },
+    "ea-151c - reflected ceiling plan - first floor level area c.pdf": {
+      "filters": {
+        "lineWidth": {
+          "enabled": true,
+          "minWidth": 8.0,
+          "maxWidth": 10.0
+        },
+        "length": {
+          "enabled": false,
+          "minLength": 50.0
+        },
+        "shape": {
+          "enabled": false,
+          "allowedShapes": [ "line", "rectangle" ]
+        },
+        "singleSegment": {
+          "enabled": false,
+          "offset": 10.0
+        }
+      },
+      "polygon": {
+        "removeNested": false,
+        "removeOuter": true,
+        "gapTolerance": 100.0
+      },
+      "roomSize": {
+        "enabled": false,
+        "minRoomCount": 5,
+        "maxRoomCount": 25
+      }
+    }
+  }
+}
+
