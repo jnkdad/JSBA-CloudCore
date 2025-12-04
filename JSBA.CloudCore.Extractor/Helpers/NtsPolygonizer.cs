@@ -60,8 +60,8 @@ public class NtsPolygonizer
     }
 
     /// <summary>
-    /// Bridge small gaps by buffering lines slightly, then extracting centerlines
-    /// This is much faster than the custom gap bridging algorithm
+    /// Bridge small gaps by merging line segments that have endpoints within gapTolerance distance
+    /// Uses iterative merging to connect all segments that should be bridged
     /// </summary>
     public List<RawPath> BridgeGaps(List<RawPath> paths, double gapTolerance)
     {
@@ -73,31 +73,293 @@ public class NtsPolygonizer
 
         try
         {
-            // Convert paths to NTS LineStrings
-            var lineStrings = paths.Select(ToLineString).ToList();
+            // Work with a mutable list of paths
+            var workingPaths = paths.Select(p => new RawPath
+            {
+                Points = new List<Point2D>(p.Points),
+                LineWidth = p.LineWidth,
+                IsStroked = p.IsStroked,
+                IsFilled = p.IsFilled,
+                SegmentCount = p.SegmentCount,
+                PathLength = p.PathLength,
+                PathType = p.PathType,
+                ObjectIndex = p.ObjectIndex
+            }).ToList();
 
-            // Create a MultiLineString
-            var multiLineString = _geometryFactory.CreateMultiLineString(lineStrings.ToArray());
+            bool merged = true;
+            int iterations = 0;
+            int maxIterations = workingPaths.Count * 2; // Prevent infinite loops
 
-            // Union all lines (this merges connected segments)
-            var merged = multiLineString.Union();
+            // Iteratively merge paths until no more merges are possible
+            while (merged && iterations < maxIterations)
+            {
+                merged = false;
+                iterations++;
 
-            _logger.LogInformation("NTS: Gap bridging complete. Result type: {Type}", merged.GeometryType);
+                for (int i = 0; i < workingPaths.Count; i++)
+                {
+                    if (workingPaths[i].Points.Count < 2)
+                        continue;
 
-            // Convert back to RawPaths
-            var result = new List<RawPath>();
-            ExtractLineStrings(merged, result, paths.FirstOrDefault()?.LineWidth ?? 1.0);
+                    var path1 = workingPaths[i];
+                    var start1 = path1.Points[0];
+                    var end1 = path1.Points[path1.Points.Count - 1];
 
-            _logger.LogInformation("NTS: Gap bridging: {Original} → {Merged} paths",
-                paths.Count, result.Count);
+                    for (int j = i + 1; j < workingPaths.Count; j++)
+                    {
+                        if (workingPaths[j].Points.Count < 2)
+                            continue;
 
-            return result;
+                        var path2 = workingPaths[j];
+                        var start2 = path2.Points[0];
+                        var end2 = path2.Points[path2.Points.Count - 1];
+
+                        // Check all endpoint combinations
+                        if (TryMergePaths(path1, path2, start1, end1, start2, end2, gapTolerance, out var mergedPath))
+                        {
+                            workingPaths[i] = mergedPath;
+                            workingPaths.RemoveAt(j);
+                            merged = true;
+                            break; // Restart search after merge
+                        }
+                    }
+
+                    if (merged)
+                        break; // Restart outer loop
+                }
+            }
+
+            // Close paths that are almost closed (start and end points are very close)
+            // This helps polygon reconstruction by ensuring paths form closed loops
+            const double closeTolerance = 1.0; // Close paths if endpoints are within 1 unit
+            foreach (var path in workingPaths)
+            {
+                if (path.Points.Count >= 3)
+                {
+                    var start = path.Points[0];
+                    var end = path.Points[path.Points.Count - 1];
+                    double distance = Math.Sqrt(Math.Pow(end.X - start.X, 2) + Math.Pow(end.Y - start.Y, 2));
+                    
+                    if (distance <= closeTolerance && distance > 0.001) // Almost closed but not exactly
+                    {
+                        // Close the path by adding the first point at the end (creates a closed ring)
+                        path.Points.Add(new Point2D { X = start.X, Y = start.Y });
+                        _logger.LogDebug("NTS: Closed path with {PointCount} points (endpoints were {Distance:F2} apart)", 
+                            path.Points.Count, distance);
+                    }
+                }
+            }
+
+            // Update path metadata
+            foreach (var path in workingPaths)
+            {
+                path.SegmentCount = path.Points.Count;
+                path.PathLength = CalculatePathLength(path.Points);
+            }
+
+            _logger.LogInformation("NTS: Gap bridging complete after {Iterations} iterations: {Original} → {Merged} paths",
+                iterations, paths.Count, workingPaths.Count);
+
+            return workingPaths;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "NTS: Gap bridging failed, returning original paths");
             return paths;
         }
+    }
+
+    /// <summary>
+    /// Try to merge two paths if their endpoints are within gapTolerance and collinear
+    /// </summary>
+    private bool TryMergePaths(RawPath path1, RawPath path2, Point2D start1, Point2D end1, 
+        Point2D start2, Point2D end2, double gapTolerance, out RawPath mergedPath)
+    {
+        mergedPath = path1;
+
+        // Check all 4 endpoint combinations
+        // Case 1: end1 connects to start2
+        if (ArePointsClose(end1, start2, gapTolerance) && 
+            AreEndpointsCollinear(end1, path1.Points.Count > 1 ? path1.Points[path1.Points.Count - 2] : start1, 
+                                 start2, path2.Points.Count > 1 ? path2.Points[1] : end2))
+        {
+            var mergedPoints = new List<Point2D>(path1.Points);
+            // Add path2 points (skip first point if it's very close to end1)
+            if (!ArePointsClose(end1, start2, 0.1))
+            {
+                mergedPoints.Add(start2);
+            }
+            for (int i = 1; i < path2.Points.Count; i++)
+            {
+                mergedPoints.Add(path2.Points[i]);
+            }
+            mergedPath = CreateMergedPath(path1, path2, mergedPoints);
+            return true;
+        }
+
+        // Case 2: end1 connects to end2 (reverse path2)
+        if (ArePointsClose(end1, end2, gapTolerance) && 
+            AreEndpointsCollinear(end1, path1.Points.Count > 1 ? path1.Points[path1.Points.Count - 2] : start1, 
+                                 end2, path2.Points.Count > 1 ? path2.Points[path2.Points.Count - 2] : start2))
+        {
+            var mergedPoints = new List<Point2D>(path1.Points);
+            // Add path2 points in reverse (skip last point if it's very close to end1)
+            if (!ArePointsClose(end1, end2, 0.1))
+            {
+                mergedPoints.Add(end2);
+            }
+            for (int i = path2.Points.Count - 2; i >= 0; i--)
+            {
+                mergedPoints.Add(path2.Points[i]);
+            }
+            mergedPath = CreateMergedPath(path1, path2, mergedPoints);
+            return true;
+        }
+
+        // Case 3: start1 connects to start2 (reverse path1)
+        if (ArePointsClose(start1, start2, gapTolerance) && 
+            AreEndpointsCollinear(start1, path1.Points.Count > 1 ? path1.Points[1] : end1, 
+                                 start2, path2.Points.Count > 1 ? path2.Points[1] : end2))
+        {
+            var mergedPoints = new List<Point2D>();
+            // Add path1 points in reverse
+            for (int i = path1.Points.Count - 1; i >= 0; i--)
+            {
+                mergedPoints.Add(path1.Points[i]);
+            }
+            // Add path2 points (skip first point if it's very close to start1)
+            if (!ArePointsClose(start1, start2, 0.1))
+            {
+                mergedPoints.Add(start2);
+            }
+            for (int i = 1; i < path2.Points.Count; i++)
+            {
+                mergedPoints.Add(path2.Points[i]);
+            }
+            mergedPath = CreateMergedPath(path1, path2, mergedPoints);
+            return true;
+        }
+
+        // Case 4: start1 connects to end2 (reverse path1)
+        if (ArePointsClose(start1, end2, gapTolerance) && 
+            AreEndpointsCollinear(start1, path1.Points.Count > 1 ? path1.Points[1] : end1, 
+                                 end2, path2.Points.Count > 1 ? path2.Points[path2.Points.Count - 2] : start2))
+        {
+            var mergedPoints = new List<Point2D>();
+            // Add path1 points in reverse
+            for (int i = path1.Points.Count - 1; i >= 0; i--)
+            {
+                mergedPoints.Add(path1.Points[i]);
+            }
+            // Add path2 points (skip last point if it's very close to start1)
+            if (!ArePointsClose(start1, end2, 0.1))
+            {
+                mergedPoints.Add(end2);
+            }
+            for (int i = path2.Points.Count - 2; i >= 0; i--)
+            {
+                mergedPoints.Add(path2.Points[i]);
+            }
+            mergedPath = CreateMergedPath(path1, path2, mergedPoints);
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Create a merged path from two paths
+    /// </summary>
+    private RawPath CreateMergedPath(RawPath path1, RawPath path2, List<Point2D> mergedPoints)
+    {
+        return new RawPath
+        {
+            Points = mergedPoints,
+            LineWidth = Math.Max(path1.LineWidth, path2.LineWidth), // Use thicker line width
+            IsStroked = path1.IsStroked || path2.IsStroked,
+            IsFilled = path1.IsFilled || path2.IsFilled,
+            SegmentCount = mergedPoints.Count,
+            PathLength = CalculatePathLength(mergedPoints),
+            PathType = "Polyline", // Merged paths are polylines
+            ObjectIndex = Math.Min(path1.ObjectIndex, path2.ObjectIndex) // Keep original index
+        };
+    }
+
+    /// <summary>
+    /// Check if two points are close within tolerance
+    /// </summary>
+    private bool ArePointsClose(Point2D p1, Point2D p2, double tolerance)
+    {
+        double distance = Math.Sqrt(Math.Pow(p1.X - p2.X, 2) + Math.Pow(p1.Y - p2.Y, 2));
+        return distance <= tolerance;
+    }
+
+    /// <summary>
+    /// Check if endpoints can be bridged by extending lines in their current direction
+    /// Rule: Only bridge if lines are collinear (nearly parallel) AND gap aligns with both directions
+    /// This prevents bridging parallel lines at corners (like ||)
+    /// </summary>
+    private bool AreEndpointsCollinear(Point2D endpoint1, Point2D directionPoint1, Point2D endpoint2, Point2D directionPoint2)
+    {
+        // Calculate direction vectors for each line
+        double dx1 = directionPoint1.X - endpoint1.X;
+        double dy1 = directionPoint1.Y - endpoint1.Y;
+        double dx2 = directionPoint2.X - endpoint2.X;
+        double dy2 = directionPoint2.Y - endpoint2.Y;
+
+        // Calculate gap direction
+        double gapDx = endpoint2.X - endpoint1.X;
+        double gapDy = endpoint2.Y - endpoint1.Y;
+
+        // Normalize vectors
+        double len1 = Math.Sqrt(dx1 * dx1 + dy1 * dy1);
+        double len2 = Math.Sqrt(dx2 * dx2 + dy2 * dy2);
+        double gapLen = Math.Sqrt(gapDx * gapDx + gapDy * gapDy);
+
+        if (len1 < 0.001 || len2 < 0.001 || gapLen < 0.001)
+            return true; // Degenerate case (points are very close), allow connection
+
+        dx1 /= len1;
+        dy1 /= len1;
+        dx2 /= len2;
+        gapDx /= gapLen;
+        gapDy /= gapLen;
+
+        // First check: Are the two lines collinear (nearly parallel and pointing in same direction)?
+        // Use dot product to check if line directions are aligned
+        double linesDot = Math.Abs(dx1 * dx2 + dy1 * dy2);
+        if (linesDot < 0.95) // Lines are not collinear (more than ~18 degrees apart)
+        {
+            return false; // Don't bridge non-collinear lines
+        }
+
+        // Second check: Does the gap direction align with BOTH line directions?
+        // The gap should be in the same direction as both lines (we can extend either line to bridge)
+        double gapDot1 = gapDx * dx1 + gapDy * dy1;
+        double gapDot2 = gapDx * dx2 + gapDy * dy2;
+
+        // Gap must align with both directions (within ~18 degrees)
+        // We use the absolute value to allow bridging in either direction along the line
+        return Math.Abs(gapDot1) > 0.95 && Math.Abs(gapDot2) > 0.95;
+    }
+
+    /// <summary>
+    /// Calculate total length of a path
+    /// </summary>
+    private double CalculatePathLength(List<Point2D> points)
+    {
+        if (points.Count < 2)
+            return 0;
+
+        double totalLength = 0;
+        for (int i = 0; i < points.Count - 1; i++)
+        {
+            double dx = points[i + 1].X - points[i].X;
+            double dy = points[i + 1].Y - points[i].Y;
+            totalLength += Math.Sqrt(dx * dx + dy * dy);
+        }
+
+        return totalLength;
     }
 
     /// <summary>
@@ -135,24 +397,61 @@ public class NtsPolygonizer
     {
         _logger.LogInformation("NTS: Reconstructing polygons from {Count} paths", paths.Count);
 
+        if (paths.Count == 0)
+        {
+            _logger.LogWarning("NTS: No paths provided for polygon reconstruction");
+            return new List<RoomBoundary>();
+        }
+
         try
         {
             // Convert paths to NTS LineStrings
             var lineStrings = paths.Select(ToLineString).ToList();
 
+            // Log path information for debugging
+            int totalPoints = lineStrings.Sum(ls => ls.Coordinates.Length);
+            _logger.LogDebug("NTS: Total points in all paths: {PointCount}", totalPoints);
+            _logger.LogDebug("NTS: Path lengths: {Lengths}", 
+                string.Join(", ", lineStrings.Select(ls => ls.Length.ToString("F2"))));
+
             // Use NTS Polygonizer to find all closed polygons
             var polygonizer = new Polygonizer();
             polygonizer.Add(lineStrings.Cast<Geometry>().ToList());
 
+            // Get all results from polygonizer
             var polygons = polygonizer.GetPolygons();
+            var cutEdges = polygonizer.GetCutEdges();
+            var dangles = polygonizer.GetDangles();
+            var invalidRingLines = polygonizer.GetInvalidRingLines();
 
-            _logger.LogInformation("NTS: Found {Count} polygons", polygons.Count);
+            _logger.LogInformation("NTS: Polygonizer results - Polygons: {PolygonCount}, Cut Edges: {CutEdgeCount}, Dangles: {DangleCount}, Invalid Rings: {InvalidRingCount}",
+                polygons.Count, cutEdges.Count, dangles.Count, invalidRingLines.Count);
+
+            if (polygons.Count == 0)
+            {
+                _logger.LogWarning("NTS: No polygons found. This may indicate:");
+                _logger.LogWarning("  - Paths do not form closed loops");
+                _logger.LogWarning("  - Gaps are too large to form closed rings");
+                _logger.LogWarning("  - Paths need additional gap bridging");
+                
+                // Log some diagnostic information
+                if (cutEdges.Count > 0)
+                {
+                    _logger.LogDebug("NTS: Found {Count} cut edges (edges that are not part of any polygon)", cutEdges.Count);
+                }
+                if (dangles.Count > 0)
+                {
+                    _logger.LogDebug("NTS: Found {Count} dangles (edges that don't connect to form rings)", dangles.Count);
+                }
+            }
 
             // Convert to RoomBoundary
             var result = polygons
                 .Cast<Polygon>()
                 .Select(ToRoomBoundary)
                 .ToList();
+
+            _logger.LogInformation("NTS: Reconstructed {Count} polygons", result.Count);
 
             return result;
         }

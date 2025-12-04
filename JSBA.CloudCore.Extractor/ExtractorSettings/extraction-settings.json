@@ -102,7 +102,7 @@
         },
         "length": {
           "enabled": true,
-          "minLength": 20.0
+          "minLength": 50.0
         },
         "shape": {
           "enabled": false,
@@ -116,7 +116,7 @@
       "polygon": {
         "removeNested": false,
         "removeOuter": true,
-        "gapTolerance": 0
+        "gapTolerance": 50
       },
       "roomSize": {
         "enabled": false,
