@@ -9,6 +9,7 @@ using JSBA.CloudCore.Extractor;
 using JSBA.CloudCore.Extractor.Helpers;
 using Xunit;
 using Xunit.Abstractions;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace JSBA.CloudCore.Tests
 {
@@ -489,8 +490,10 @@ namespace JSBA.CloudCore.Tests
             //var testPdfPath = FindTestPdf("Project3_onlywall.pdf");
             //var testPdfPath = FindTestPdf("Project3_doorwindow.pdf");
             //var testPdfPath = FindTestPdf("Project3_roomtag.pdf");
-
-            var testPdfPath = FindTestPdf("EA-151c - REFLECTED CEILING PLAN - FIRST FLOOR LEVEL AREA c.pdf");
+            //var testPdfPath = FindTestPdf("Multiple rooms with room tags (no noise).pdf");
+            var testPdfPath = FindTestPdf("Multiple rooms with room tags (no noise)_tworooms.pdf");
+            
+            //var testPdfPath = FindTestPdf("EA-151c - REFLECTED CEILING PLAN - FIRST FLOOR LEVEL AREA c.pdf");
             if (!File.Exists(testPdfPath))
             {
                 Console.WriteLine($"Test PDF not found: {testPdfPath}. Skipping test.");

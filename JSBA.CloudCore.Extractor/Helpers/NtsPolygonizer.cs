@@ -170,22 +170,32 @@ public class NtsPolygonizer
     }
 
     /// <summary>
-    /// Try to merge two paths if their endpoints are within gapTolerance and collinear
+    /// Try to merge two paths if their endpoints are within gapTolerance
+    /// Handles both collinear lines (extend in same direction) and perpendicular lines (L/T joints)
     /// </summary>
     private bool TryMergePaths(RawPath path1, RawPath path2, Point2D start1, Point2D end1, 
         Point2D start2, Point2D end2, double gapTolerance, out RawPath mergedPath)
     {
         mergedPath = path1;
 
+        // Get direction vectors for each path at endpoints
+        var dir1End = GetDirectionAtEndpoint(path1, end1, true);
+        var dir1Start = GetDirectionAtEndpoint(path1, start1, false);
+        var dir2End = GetDirectionAtEndpoint(path2, end2, true);
+        var dir2Start = GetDirectionAtEndpoint(path2, start2, false);
+
         // Check all 4 endpoint combinations
         // Case 1: end1 connects to start2
         if (ArePointsClose(end1, start2, gapTolerance) && 
-            AreEndpointsCollinear(end1, path1.Points.Count > 1 ? path1.Points[path1.Points.Count - 2] : start1, 
-                                 start2, path2.Points.Count > 1 ? path2.Points[1] : end2))
+            CanBridgeEndpoints(end1, dir1End, start2, dir2Start, gapTolerance, out var connectionPoint1))
         {
             var mergedPoints = new List<Point2D>(path1.Points);
-            // Add path2 points (skip first point if it's very close to end1)
-            if (!ArePointsClose(end1, start2, 0.1))
+            // Add connection point if found (for L/T joints), otherwise add start2 directly
+            if (connectionPoint1 != null)
+            {
+                mergedPoints.Add(connectionPoint1);
+            }
+            else if (!ArePointsClose(end1, start2, 0.1))
             {
                 mergedPoints.Add(start2);
             }
@@ -199,12 +209,15 @@ public class NtsPolygonizer
 
         // Case 2: end1 connects to end2 (reverse path2)
         if (ArePointsClose(end1, end2, gapTolerance) && 
-            AreEndpointsCollinear(end1, path1.Points.Count > 1 ? path1.Points[path1.Points.Count - 2] : start1, 
-                                 end2, path2.Points.Count > 1 ? path2.Points[path2.Points.Count - 2] : start2))
+            CanBridgeEndpoints(end1, dir1End, end2, dir2End, gapTolerance, out var connectionPoint2))
         {
             var mergedPoints = new List<Point2D>(path1.Points);
-            // Add path2 points in reverse (skip last point if it's very close to end1)
-            if (!ArePointsClose(end1, end2, 0.1))
+            // Add connection point if found
+            if (connectionPoint2 != null)
+            {
+                mergedPoints.Add(connectionPoint2);
+            }
+            else if (!ArePointsClose(end1, end2, 0.1))
             {
                 mergedPoints.Add(end2);
             }
@@ -218,8 +231,7 @@ public class NtsPolygonizer
 
         // Case 3: start1 connects to start2 (reverse path1)
         if (ArePointsClose(start1, start2, gapTolerance) && 
-            AreEndpointsCollinear(start1, path1.Points.Count > 1 ? path1.Points[1] : end1, 
-                                 start2, path2.Points.Count > 1 ? path2.Points[1] : end2))
+            CanBridgeEndpoints(start1, dir1Start, start2, dir2Start, gapTolerance, out var connectionPoint3))
         {
             var mergedPoints = new List<Point2D>();
             // Add path1 points in reverse
@@ -227,8 +239,12 @@ public class NtsPolygonizer
             {
                 mergedPoints.Add(path1.Points[i]);
             }
-            // Add path2 points (skip first point if it's very close to start1)
-            if (!ArePointsClose(start1, start2, 0.1))
+            // Add connection point if found
+            if (connectionPoint3 != null)
+            {
+                mergedPoints.Add(connectionPoint3);
+            }
+            else if (!ArePointsClose(start1, start2, 0.1))
             {
                 mergedPoints.Add(start2);
             }
@@ -242,8 +258,7 @@ public class NtsPolygonizer
 
         // Case 4: start1 connects to end2 (reverse path1)
         if (ArePointsClose(start1, end2, gapTolerance) && 
-            AreEndpointsCollinear(start1, path1.Points.Count > 1 ? path1.Points[1] : end1, 
-                                 end2, path2.Points.Count > 1 ? path2.Points[path2.Points.Count - 2] : start2))
+            CanBridgeEndpoints(start1, dir1Start, end2, dir2End, gapTolerance, out var connectionPoint4))
         {
             var mergedPoints = new List<Point2D>();
             // Add path1 points in reverse
@@ -251,8 +266,12 @@ public class NtsPolygonizer
             {
                 mergedPoints.Add(path1.Points[i]);
             }
-            // Add path2 points (skip last point if it's very close to start1)
-            if (!ArePointsClose(start1, end2, 0.1))
+            // Add connection point if found
+            if (connectionPoint4 != null)
+            {
+                mergedPoints.Add(connectionPoint4);
+            }
+            else if (!ArePointsClose(start1, end2, 0.1))
             {
                 mergedPoints.Add(end2);
             }
@@ -262,6 +281,126 @@ public class NtsPolygonizer
             }
             mergedPath = CreateMergedPath(path1, path2, mergedPoints);
             return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Get the direction vector at an endpoint of a path
+    /// </summary>
+    private (double dx, double dy) GetDirectionAtEndpoint(RawPath path, Point2D endpoint, bool isEnd)
+    {
+        if (path.Points.Count < 2)
+            return (0, 0);
+
+        Point2D otherPoint;
+        if (isEnd)
+        {
+            // Direction from second-to-last point to last point
+            otherPoint = path.Points.Count > 1 ? path.Points[path.Points.Count - 2] : path.Points[0];
+        }
+        else
+        {
+            // Direction from first point to second point
+            otherPoint = path.Points.Count > 1 ? path.Points[1] : path.Points[path.Points.Count - 1];
+        }
+
+        double dx = endpoint.X - otherPoint.X;
+        double dy = endpoint.Y - otherPoint.Y;
+        double len = Math.Sqrt(dx * dx + dy * dy);
+        
+        if (len < 0.001)
+            return (0, 0);
+
+        return (dx / len, dy / len);
+    }
+
+    /// <summary>
+    /// Check if two endpoints can be bridged - handles both collinear and perpendicular lines
+    /// Returns true if they can be bridged, and optionally returns the connection point (for L/T joints)
+    /// </summary>
+    private bool CanBridgeEndpoints(Point2D p1, (double dx, double dy) dir1, 
+        Point2D p2, (double dx, double dy) dir2, double gapTolerance, out Point2D? connectionPoint)
+    {
+        connectionPoint = null;
+
+        // Check if endpoints are very close - just connect directly
+        double distance = Math.Sqrt(Math.Pow(p2.X - p1.X, 2) + Math.Pow(p2.Y - p1.Y, 2));
+        if (distance < 0.1)
+        {
+            return true; // Very close, connect directly
+        }
+
+        // Check if lines are collinear (nearly parallel) - use existing collinearity check
+        double linesDot = Math.Abs(dir1.dx * dir2.dx + dir1.dy * dir2.dy);
+        if (linesDot > 0.95) // Lines are collinear
+        {
+            // Use the existing collinearity logic
+            double gapDx = p2.X - p1.X;
+            double gapDy = p2.Y - p1.Y;
+            double gapLen = Math.Sqrt(gapDx * gapDx + gapDy * gapDy);
+            if (gapLen < 0.001)
+                return true;
+
+            gapDx /= gapLen;
+            gapDy /= gapLen;
+
+            double gapDot1 = gapDx * dir1.dx + gapDy * dir1.dy;
+            double gapDot2 = gapDx * dir2.dx + gapDy * dir2.dy;
+
+            // Gap must align with both directions
+            return Math.Abs(gapDot1) > 0.95 && Math.Abs(gapDot2) > 0.95;
+        }
+
+        // Lines are not collinear - check if they're perpendicular (L or T joint)
+        // For perpendicular lines, dot product should be near 0
+        if (Math.Abs(linesDot) < 0.1) // Lines are perpendicular (within ~5 degrees of 90)
+        {
+            // Find intersection point by extending both lines
+            // Line 1: p1 + t * dir1
+            // Line 2: p2 + s * dir2
+            // Solve for intersection: p1 + t * dir1 = p2 + s * dir2
+            // Rearranging: t * dir1 - s * dir2 = p2 - p1
+
+            double dx = p2.X - p1.X;
+            double dy = p2.Y - p1.Y;
+
+            // Solve using Cramer's rule for:
+            // t * dir1.dx - s * dir2.dx = dx
+            // t * dir1.dy - s * dir2.dy = dy
+            double det = dir1.dx * (-dir2.dy) - dir1.dy * (-dir2.dx);
+            
+            if (Math.Abs(det) > 0.001) // Lines are not parallel
+            {
+                double t = (dx * (-dir2.dy) - dy * (-dir2.dx)) / det;
+                double s = (dir1.dx * dy - dir1.dy * dx) / det;
+
+                // Check if intersection is within reasonable extension distance
+                if (t >= -gapTolerance && t <= gapTolerance && s >= -gapTolerance && s <= gapTolerance)
+                {
+                    // Calculate intersection point
+                    double ix = p1.X + t * dir1.dx;
+                    double iy = p1.Y + t * dir1.dy;
+
+                    // Check if intersection point is within tolerance of both endpoints
+                    double dist1 = Math.Sqrt(Math.Pow(ix - p1.X, 2) + Math.Pow(iy - p1.Y, 2));
+                    double dist2 = Math.Sqrt(Math.Pow(ix - p2.X, 2) + Math.Pow(iy - p2.Y, 2));
+
+                    if (dist1 <= gapTolerance && dist2 <= gapTolerance)
+                    {
+                        connectionPoint = new Point2D { X = ix, Y = iy };
+                        return true;
+                    }
+                }
+            }
+        }
+
+        // For other angles, if endpoints are close enough, allow connection
+        // This handles cases where lines are at angles other than 0, 90, or 180 degrees
+        if (distance <= gapTolerance * 0.5)
+        {
+            return true; // Close enough, connect directly
         }
 
         return false;

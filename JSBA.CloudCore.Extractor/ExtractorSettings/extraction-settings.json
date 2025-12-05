@@ -154,6 +154,68 @@
         "minRoomCount": 5,
         "maxRoomCount": 25
       }
+    },
+    "Multiple rooms with room tags (no noise).pdf": {
+      "filters": {
+        "lineWidth": {
+          "enabled": false,
+          "minWidth": 0.5,
+          "maxWidth": 10.0
+        },
+        "length": {
+          "enabled": true,
+          "minLength": 80.0
+        },
+        "shape": {
+          "enabled": false,
+          "allowedShapes": [ "line", "rectangle" ]
+        },
+        "singleSegment": {
+          "enabled": false,
+          "offset": 10.0
+        }
+      },
+      "polygon": {
+        "removeNested": false,
+        "removeOuter": false,
+        "gapTolerance": 80.0
+      },
+      "roomSize": {
+        "enabled": false,
+        "minRoomCount": 5,
+        "maxRoomCount": 25
+      }
+    },
+    "Multiple rooms with room tags (no noise)_tworooms.pdf": {
+      "filters": {
+        "lineWidth": {
+          "enabled": false,
+          "minWidth": 0.5,
+          "maxWidth": 10.0
+        },
+        "length": {
+          "enabled": true,
+          "minLength": 50.0
+        },
+        "shape": {
+          "enabled": false,
+          "allowedShapes": [ "line", "rectangle" ]
+        },
+        "singleSegment": {
+          "enabled": false,
+          "offset": 10.0
+        }
+      },
+      "polygon": {
+        "removeNested": false,
+        "removeOuter": false,
+        "gapTolerance": 80.0
+      },
+      "roomSize": {
+        "enabled": false,
+        "minRoomCount": 5,
+        "maxRoomCount": 25
+      }
     }
   }
 }
