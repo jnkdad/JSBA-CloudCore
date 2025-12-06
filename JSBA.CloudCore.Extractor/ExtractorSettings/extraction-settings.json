@@ -177,8 +177,9 @@
       },
       "polygon": {
         "removeNested": false,
-        "removeOuter": false,
-        "gapTolerance": 80.0
+        "removeOuter": true,
+        "gapTolerance": 80.0,
+        "minArea": 2000.0
       },
       "roomSize": {
         "enabled": false,
@@ -208,8 +209,9 @@
       },
       "polygon": {
         "removeNested": false,
-        "removeOuter": false,
-        "gapTolerance": 80.0
+        "removeOuter": true,
+        "gapTolerance": 80.0,
+        "minArea": 50
       },
       "roomSize": {
         "enabled": false,

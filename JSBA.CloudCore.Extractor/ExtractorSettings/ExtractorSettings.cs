@@ -217,6 +217,7 @@ namespace JSBA.CloudCore.Extractor
         public bool RemoveNested { get; set; } = false; // Remove inner polygons
         public bool RemoveOuter { get; set; } = true;   // Remove outer polygons (keep inner)
         public double GapTolerance { get; set; } = 50; // Tolerance for connecting segments
+        public double MinArea { get; set; } = 0; // Minimum polygon area (0 = no filter)
     }
 
     public class RoomSizeSettings

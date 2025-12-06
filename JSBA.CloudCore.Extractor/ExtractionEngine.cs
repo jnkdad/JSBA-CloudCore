@@ -426,6 +426,13 @@ namespace JSBA.CloudCore.Extractor
                     _logger.LogInformation("PDFium Native: After NTS removing nested polygons: {Count} boundaries", roomBoundaries.Count);
                 }
 
+                // Filter by minimum area if specified
+                if (settings?.Polygon.MinArea > 0)
+                {
+                    roomBoundaries = _ntsPolygonizer.FilterByMinArea(roomBoundaries, settings.Polygon.MinArea);
+                    _logger.LogInformation("PDFium Native: After min area filter ({MinArea}): {Count} boundaries", settings.Polygon.MinArea, roomBoundaries.Count);
+                }
+
                 // Add to boundaries list
                 boundaries.AddRange(roomBoundaries);
 

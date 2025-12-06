@@ -131,7 +131,7 @@ public class NtsPolygonizer
 
             // Close paths that are almost closed (start and end points are very close)
             // This helps polygon reconstruction by ensuring paths form closed loops
-            const double closeTolerance = 1.0; // Close paths if endpoints are within 1 unit
+            double closeTolerance = Math.Max(gapTolerance, 1.0); // Close paths if endpoints are within 1 unit
             foreach (var path in workingPaths)
             {
                 if (path.Points.Count >= 3)
@@ -144,8 +144,8 @@ public class NtsPolygonizer
                     {
                         // Close the path by adding the first point at the end (creates a closed ring)
                         path.Points.Add(new Point2D { X = start.X, Y = start.Y });
-                        _logger.LogDebug("NTS: Closed path with {PointCount} points (endpoints were {Distance:F2} apart)", 
-                            path.Points.Count, distance);
+                        _logger.LogInformation("NTS: Closed path with {PointCount} points (endpoints were {Distance:F2} apart, tolerance {Tolerance:F2})", 
+                            path.Points.Count, distance, closeTolerance);
                     }
                 }
             }
@@ -544,6 +544,85 @@ public class NtsPolygonizer
 
         try
         {
+            var result = new List<RoomBoundary>();
+            
+            // First, try to create polygons directly from closed paths
+            // This avoids the noding issue where shared walls create many small faces
+            foreach (var path in paths)
+            {
+                if (path.Points.Count < 4) continue; // Need at least 4 points for a polygon
+                
+                var coords = path.Points.Select(p => new Coordinate(p.X, p.Y)).ToList();
+                
+                // Check if path is closed (start == end within tolerance)
+                var first = coords[0];
+                var last = coords[^1];
+                var distance = Math.Sqrt(Math.Pow(first.X - last.X, 2) + Math.Pow(first.Y - last.Y, 2));
+                
+                _logger.LogInformation("NTS: Path has {Points} points, distance from start to end: {Distance:F2}", coords.Count, distance);
+                
+                if (distance < 1.0) // Path is closed
+                {
+                    // Ensure exactly closed
+                    if (!first.Equals2D(last))
+                    {
+                        coords.Add(new Coordinate(first.X, first.Y));
+                    }
+                    
+                    try
+                    {
+                        var ring = _geometryFactory.CreateLinearRing(coords.ToArray());
+                        
+                        // Check if ring is valid (not self-intersecting)
+                        if (ring.IsValid && ring.IsSimple)
+                        {
+                            var polygon = _geometryFactory.CreatePolygon(ring);
+                            if (polygon.IsValid && polygon.Area > 0)
+                            {
+                                result.Add(ToRoomBoundary(polygon));
+                                _logger.LogInformation("NTS: Created polygon directly from closed path (area: {Area:F2})", polygon.Area);
+                            }
+                        }
+                        else
+                        {
+                            // Ring is self-intersecting - use Polygonizer on this single ring
+                            _logger.LogInformation("NTS: Ring is self-intersecting, using Polygonizer on single ring");
+                            var lineString = _geometryFactory.CreateLineString(coords.ToArray());
+                            var nodedRing = lineString.Union(); // Node the self-intersecting ring
+                            
+                            var singlePolygonizer = new Polygonizer();
+                            singlePolygonizer.Add(nodedRing);
+                            var singlePolygons = singlePolygonizer.GetPolygons();
+                            
+                            _logger.LogInformation("NTS: Single ring polygonizer found {Count} polygons", singlePolygons.Count);
+                            
+                            foreach (Polygon p in singlePolygons.Cast<Polygon>())
+                            {
+                                if (p.IsValid && p.Area > 0)
+                                {
+                                    result.Add(ToRoomBoundary(p));
+                                    _logger.LogInformation("NTS: Added polygon from single ring, area: {Area:F2}", p.Area);
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogDebug("NTS: Failed to create polygon directly: {Message}", ex.Message);
+                    }
+                }
+            }
+            
+            // If we successfully created polygons directly, return them
+            if (result.Count > 0)
+            {
+                _logger.LogInformation("NTS: Reconstructed {Count} polygons directly from closed paths", result.Count);
+                return result;
+            }
+            
+            // Fall back to polygonizer with noding for complex cases
+            _logger.LogInformation("NTS: Falling back to polygonizer with noding");
+            
             // Convert paths to NTS LineStrings
             var lineStrings = paths.Select(ToLineString).ToList();
 
@@ -553,9 +632,24 @@ public class NtsPolygonizer
             _logger.LogDebug("NTS: Path lengths: {Lengths}", 
                 string.Join(", ", lineStrings.Select(ls => ls.Length.ToString("F2"))));
 
+            // Node the geometry - this splits lines at their intersection points
+            // This is essential for handling adjacent rooms that share walls
+            var multiLine = _geometryFactory.CreateMultiLineString(lineStrings.ToArray());
+            var nodedGeometry = multiLine.Union(); // Union with itself nodes the geometry
+            
+            // Extract all line segments from the noded result
+            var nodedLines = new List<Geometry>();
+            for (int i = 0; i < nodedGeometry.NumGeometries; i++)
+            {
+                nodedLines.Add(nodedGeometry.GetGeometryN(i));
+            }
+            
+            _logger.LogInformation("NTS: After noding: {Original} lines -> {Noded} lines", 
+                lineStrings.Count, nodedLines.Count);
+            
             // Use NTS Polygonizer to find all closed polygons
             var polygonizer = new Polygonizer();
-            polygonizer.Add(lineStrings.Cast<Geometry>().ToList());
+            polygonizer.Add(nodedLines);
 
             // Get all results from polygonizer
             var polygons = polygonizer.GetPolygons();
@@ -585,7 +679,7 @@ public class NtsPolygonizer
             }
 
             // Convert to RoomBoundary
-            var result = polygons
+            result = polygons
                 .Cast<Polygon>()
                 .Select(ToRoomBoundary)
                 .ToList();
@@ -735,6 +829,13 @@ public class NtsPolygonizer
     {
         if (minArea <= 0)
             return boundaries;
+
+        // Log areas for debugging
+        foreach (var b in boundaries)
+        {
+            var area = GetArea(b);
+            _logger.LogInformation("NTS: Polygon area: {Area:F2}", area);
+        }
 
         var filtered = boundaries.Where(b => GetArea(b) >= minArea).ToList();
 
