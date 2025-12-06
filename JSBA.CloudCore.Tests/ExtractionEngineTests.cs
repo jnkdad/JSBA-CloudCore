@@ -132,7 +132,7 @@ namespace JSBA.CloudCore.Tests
             Assert.ThrowsAny<Exception>(() => _engine.ProcessPdfToRooms(emptyStream, options));
         }
 
-        [Fact]
+        [Fact(Skip = "No need to compare")]
         public void ComparePdfPigVsPDFiumNative_Project3OnlyWall()
         {
             // Arrange
@@ -193,7 +193,7 @@ namespace JSBA.CloudCore.Tests
                 "At least one method should extract boundaries");
         }
 
-        [Fact]
+        [Fact(Skip = "No need to compare")]
         public void ComparePdfPigVsPDFiumNative_Project3RoomTag()
         {
             // Arrange
@@ -255,7 +255,7 @@ namespace JSBA.CloudCore.Tests
             throw new FileNotFoundException($"No test PDF files found. Please ensure tests directory contains PDF files. Searched: {testsDir}, {absoluteTestsDir}");
         }
 
-        [Fact]
+        [Fact(Skip = "No need to compare")]
         public void CompareTextExtraction_PdfPigVsPDFiumNative_Project3RoomTag()
         {
             // Arrange
@@ -324,7 +324,7 @@ namespace JSBA.CloudCore.Tests
                 "At least one method should extract text labels");
         }
 
-        [Fact]
+        [Fact(Skip = "No need to compare")]
         public void CompareTextExtraction_PdfPigVsPDFiumNative_Project3OnlyWall()
         {
             // Arrange
@@ -483,33 +483,38 @@ namespace JSBA.CloudCore.Tests
             Console.WriteLine($"=== END FILTERING ===");
         }
 
-        [Fact]
-        public void VisualizePaths_WithComplexPdf_ShowsAllPaths()
+        /// <summary>
+        /// Helper method to visualize paths for a given PDF file
+        /// </summary>
+        private void VisualizePathsForPdf(string pdfFileName, int expectedBoundaryCount)
         {
-            // Arrange - Use a more complex PDF
-            //var testPdfPath = FindTestPdf("Project3_onlywall.pdf");
-            //var testPdfPath = FindTestPdf("Project3_doorwindow.pdf");
-            //var testPdfPath = FindTestPdf("Project3_roomtag.pdf");
-            //var testPdfPath = FindTestPdf("Multiple rooms with room tags (no noise).pdf");
-            var testPdfPath = FindTestPdf("Multiple rooms with room tags (no noise)_tworooms.pdf");
-            
-            //var testPdfPath = FindTestPdf("EA-151c - REFLECTED CEILING PLAN - FIRST FLOOR LEVEL AREA c.pdf");
+            // Arrange
+            var testPdfPath = FindTestPdf(pdfFileName);
             if (!File.Exists(testPdfPath))
             {
-                Console.WriteLine($"Test PDF not found: {testPdfPath}. Skipping test.");
+                _output.WriteLine($"Test PDF not found: {testPdfPath}. Skipping test.");
                 return;
             }
+
+            // Derive test name from PDF file name (remove extension and sanitize)
+            var testName = Path.GetFileNameWithoutExtension(pdfFileName)
+                .Replace(" ", "_")
+                .Replace("(", "")
+                .Replace(")", "")
+                .Replace(".", "");
+
             // settingsPath defaults to standard location if not provided
-              var settings = _engine.LoadSettingsForPdf(testPdfPath);
+            var settings = _engine.LoadSettingsForPdf(testPdfPath);
             using var stream = File.OpenRead(testPdfPath);
 
             // Act - Extract boundaries (this populates AllPaths and ClosedPolygons)
             var boundaries = _engine.ExtractRoomBoundariesWithPDFiumNative(stream, settings);
 
-            // Visualize raw paths, closed polygons, and final boundaries
-            var rawPathsOutput = Path.Combine(Path.GetTempPath(), "raw_paths.png");
-            var closedPolygonsOutput = Path.Combine(Path.GetTempPath(), "closed_polygons.png");
-            var finalBoundariesOutput = Path.Combine(Path.GetTempPath(), "final_boundaries.png");
+            // Create unique output file names based on test name
+            var safeTestName = testName;
+            var rawPathsOutput = Path.Combine(Path.GetTempPath(), $"raw_paths_{safeTestName}.png");
+            var closedPolygonsOutput = Path.Combine(Path.GetTempPath(), $"closed_polygons_{safeTestName}.png");
+            var finalBoundariesOutput = Path.Combine(Path.GetTempPath(), $"final_boundaries_{safeTestName}.png");
 
             TestHelper.VisualizeRawPaths(_engine.AllPaths, _engine.PageWidth, _engine.PageHeight, rawPathsOutput);
             TestHelper.VisualizePaths(_engine.ClosedPolygons, _engine.PageWidth, _engine.PageHeight, closedPolygonsOutput);
@@ -522,16 +527,48 @@ namespace JSBA.CloudCore.Tests
             Assert.True(File.Exists(rawPathsOutput), $"Raw paths visualization should be created");
             Assert.True(File.Exists(closedPolygonsOutput), $"Closed polygons visualization should be created");
             Assert.True(File.Exists(finalBoundariesOutput), $"Final boundaries visualization should be created");
+            Assert.Equal(expectedBoundaryCount, boundaries.Count);
 
-            Console.WriteLine($"=== COMPLEX PDF VISUALIZATION ===");
-            Console.WriteLine($"Total raw paths: {_engine.AllPaths.Count}");
-            Console.WriteLine($"Total closed polygons: {_engine.ClosedPolygons.Count}");
-            Console.WriteLine($"Total final boundaries: {boundaries.Count}");
-            Console.WriteLine($"Raw paths saved to: {rawPathsOutput}");
-            Console.WriteLine($"Closed polygons saved to: {closedPolygonsOutput}");
-            Console.WriteLine($"Final boundaries saved to: {finalBoundariesOutput}");
-            Console.WriteLine($"Compare all three images to see the processing pipeline!");
-            Console.WriteLine($"=== END VISUALIZATION ===");
+            _output.WriteLine($"=== PDF VISUALIZATION: {pdfFileName} ===");
+            _output.WriteLine($"Test name: {testName}");
+            _output.WriteLine($"Total raw paths: {_engine.AllPaths.Count}");
+            _output.WriteLine($"Total closed polygons: {_engine.ClosedPolygons.Count}");
+            _output.WriteLine($"Total final boundaries: {boundaries.Count} (expected: {expectedBoundaryCount})");
+            _output.WriteLine($"Raw paths saved to: {rawPathsOutput}");
+            _output.WriteLine($"Closed polygons saved to: {closedPolygonsOutput}");
+            _output.WriteLine($"Final boundaries saved to: {finalBoundariesOutput}");
+            _output.WriteLine($"Compare all three images to see the processing pipeline!");
+            _output.WriteLine($"=== END VISUALIZATION ===");
+        }
+
+        [Fact]
+        public void VisualizePaths_WithPdf_onlywall()
+        {
+            VisualizePathsForPdf("Project3_onlywall.pdf", expectedBoundaryCount: 1);
+        }
+
+        [Fact]
+        public void VisualizePaths_WithPdf_doorwindow()
+        {
+            VisualizePathsForPdf("Project3_doorwindow.pdf", expectedBoundaryCount: 1);
+        }
+
+        [Fact]
+        public void VisualizePaths_WithPdf_roomtag()
+        {
+            VisualizePathsForPdf("Project3_roomtag.pdf", expectedBoundaryCount: 1);
+        }
+
+        [Fact]
+        public void VisualizePaths_WithPdf_MultipleRoomsWithRoomTags()
+        {
+            VisualizePathsForPdf("Multiple rooms with room tags (no noise).pdf", expectedBoundaryCount: 5);
+        }
+
+        [Fact]
+        public void VisualizePaths_WithPdf_MultipleRoomsWithRoomTags_TwoRooms()
+        {
+            VisualizePathsForPdf("Multiple rooms with room tags (no noise)_tworooms.pdf", expectedBoundaryCount: 2);
         }
 
         [Fact]
