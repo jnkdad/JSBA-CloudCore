@@ -60,6 +60,381 @@ public class NtsPolygonizer
     }
 
     /// <summary>
+    /// Collapse parallel wall lines into centerlines.
+    /// This handles the case where walls are drawn with thickness (double lines).
+    /// </summary>
+    public List<RawPath> CollapseParallelWalls(List<RawPath> paths, double wallThickness)
+    {
+        if (wallThickness <= 0 || paths.Count < 2)
+            return paths;
+
+        _logger.LogInformation("NTS: Collapsing parallel walls with thickness tolerance {Thickness} for {Count} paths",
+            wallThickness, paths.Count);
+
+        var usedIndices = new HashSet<int>();
+        var result = new List<RawPath>();
+
+        for (int i = 0; i < paths.Count; i++)
+        {
+            if (usedIndices.Contains(i))
+                continue;
+
+            var path1 = paths[i];
+            bool foundPair = false;
+
+            for (int j = i + 1; j < paths.Count; j++)
+            {
+                if (usedIndices.Contains(j))
+                    continue;
+
+                var path2 = paths[j];
+
+                // Check if these are parallel lines close together
+                if (AreParallelWallLines(path1, path2, wallThickness, out var centerPath))
+                {
+                    _logger.LogInformation("NTS: Collapsed parallel paths {I} and {J} into centerline", i, j);
+                    result.Add(centerPath);
+                    usedIndices.Add(i);
+                    usedIndices.Add(j);
+                    foundPair = true;
+                    break;
+                }
+            }
+
+            if (!foundPair)
+            {
+                result.Add(path1);
+                usedIndices.Add(i);
+            }
+        }
+
+        _logger.LogInformation("NTS: Collapsed parallel walls: {Original} → {Result} paths", paths.Count, result.Count);
+        return result;
+    }
+
+    /// <summary>
+    /// Check if two paths are parallel wall lines and compute their centerline
+    /// </summary>
+    private bool AreParallelWallLines(RawPath path1, RawPath path2, double maxDistance, out RawPath centerPath)
+    {
+        centerPath = null!;
+
+        // Only works for simple 2-point line segments
+        if (path1.Points.Count != 2 || path2.Points.Count != 2)
+            return false;
+
+        var start1 = path1.Points[0];
+        var end1 = path1.Points[1];
+        var start2 = path2.Points[0];
+        var end2 = path2.Points[1];
+
+        // Calculate direction vectors
+        double dx1 = end1.X - start1.X;
+        double dy1 = end1.Y - start1.Y;
+        double dx2 = end2.X - start2.X;
+        double dy2 = end2.Y - start2.Y;
+
+        // Normalize
+        double len1 = Math.Sqrt(dx1 * dx1 + dy1 * dy1);
+        double len2 = Math.Sqrt(dx2 * dx2 + dy2 * dy2);
+
+        if (len1 < 0.001 || len2 < 0.001)
+            return false;
+
+        dx1 /= len1; dy1 /= len1;
+        dx2 /= len2; dy2 /= len2;
+
+        // Check if parallel (dot product of directions should be near 1 or -1)
+        double dot = Math.Abs(dx1 * dx2 + dy1 * dy2);
+        if (dot < 0.98) // Allow ~11 degree tolerance
+            return false;
+
+        // Check if the lines are close together (perpendicular distance)
+        // Use distance from midpoint of line2 to line1
+        double midX = (start2.X + end2.X) / 2;
+        double midY = (start2.Y + end2.Y) / 2;
+
+        // Distance from point to line: |ax + by + c| / sqrt(a² + b²)
+        // Line equation: (y1-y0)x - (x1-x0)y + (x1-x0)y0 - (y1-y0)x0 = 0
+        double a = dy1; // (end1.Y - start1.Y) normalized
+        double b = -dx1; // -(end1.X - start1.X) normalized
+        double c = dx1 * start1.Y - dy1 * start1.X;
+        double dist = Math.Abs(a * midX + b * midY + c);
+
+        if (dist > maxDistance)
+            return false;
+
+        // Check that lines overlap (project endpoints onto line)
+        // Project line2's endpoints onto line1's direction
+        double proj2Start = (start2.X - start1.X) * dx1 + (start2.Y - start1.Y) * dy1;
+        double proj2End = (end2.X - start1.X) * dx1 + (end2.Y - start1.Y) * dy1;
+
+        // Line1 goes from 0 to len1
+        double min2 = Math.Min(proj2Start, proj2End);
+        double max2 = Math.Max(proj2Start, proj2End);
+
+        // Check for overlap
+        if (max2 < -len1 * 0.1 || min2 > len1 * 1.1)
+            return false; // No overlap
+
+        // Create centerline
+        // Find the centerpoint of each pair of endpoints
+        // We need to match the endpoints correctly based on projection
+        Point2D centerStart, centerEnd;
+
+        // Determine which endpoints to pair
+        double distStartToStart = Math.Sqrt(Math.Pow(start1.X - start2.X, 2) + Math.Pow(start1.Y - start2.Y, 2));
+        double distStartToEnd = Math.Sqrt(Math.Pow(start1.X - end2.X, 2) + Math.Pow(start1.Y - end2.Y, 2));
+
+        if (distStartToStart < distStartToEnd)
+        {
+            // start1-start2 are close, end1-end2 are close
+            centerStart = new Point2D { X = (start1.X + start2.X) / 2, Y = (start1.Y + start2.Y) / 2 };
+            centerEnd = new Point2D { X = (end1.X + end2.X) / 2, Y = (end1.Y + end2.Y) / 2 };
+        }
+        else
+        {
+            // start1-end2 are close, end1-start2 are close
+            centerStart = new Point2D { X = (start1.X + end2.X) / 2, Y = (start1.Y + end2.Y) / 2 };
+            centerEnd = new Point2D { X = (end1.X + start2.X) / 2, Y = (end1.Y + start2.Y) / 2 };
+        }
+
+        centerPath = new RawPath
+        {
+            Points = new List<Point2D> { centerStart, centerEnd },
+            LineWidth = (path1.LineWidth + path2.LineWidth) / 2,
+            IsStroked = path1.IsStroked,
+            IsFilled = path1.IsFilled,
+            SegmentCount = 1,
+            PathLength = Math.Sqrt(Math.Pow(centerEnd.X - centerStart.X, 2) + Math.Pow(centerEnd.Y - centerStart.Y, 2)),
+            PathType = path1.PathType,
+            ObjectIndex = path1.ObjectIndex
+        };
+
+        return true;
+    }
+
+    /// <summary>
+    /// Extends line segments to meet perpendicular lines at their intersection points.
+    /// For each horizontal line, extends it to meet vertical lines that are within tolerance.
+    /// For each vertical line, extends it to meet horizontal lines that are within tolerance.
+    /// </summary>
+    public List<RawPath> ExtendLinesToIntersections(List<RawPath> paths, double snapTolerance)
+    {
+        _logger.LogInformation("NTS: Extending lines to intersections with snap tolerance {Tolerance} for {Count} paths",
+            snapTolerance, paths.Count);
+
+        if (paths.Count < 2)
+            return paths;
+
+        // Filter to only 2-point line segments
+        var lineSegments = paths.Where(p => p.Points.Count == 2).ToList();
+        var otherPaths = paths.Where(p => p.Points.Count != 2).ToList();
+
+        // Log each line segment for debugging
+        for (int i = 0; i < lineSegments.Count; i++)
+        {
+            var line = lineSegments[i];
+            _logger.LogInformation("NTS: Line {I}: ({X1:F1},{Y1:F1}) -> ({X2:F1},{Y2:F1})",
+                i, line.Points[0].X, line.Points[0].Y, line.Points[1].X, line.Points[1].Y);
+        }
+
+        if (lineSegments.Count < 2)
+        {
+            _logger.LogInformation("NTS: Not enough line segments to extend");
+            return paths;
+        }
+
+        // Classify lines as horizontal or vertical
+        var horizontals = new List<(int idx, RawPath path)>();
+        var verticals = new List<(int idx, RawPath path)>();
+
+        for (int i = 0; i < lineSegments.Count; i++)
+        {
+            var line = lineSegments[i];
+            var dx = Math.Abs(line.Points[1].X - line.Points[0].X);
+            var dy = Math.Abs(line.Points[1].Y - line.Points[0].Y);
+
+            if (dx > dy * 3) // More horizontal than vertical (allow some tolerance)
+                horizontals.Add((i, line));
+            else if (dy > dx * 3) // More vertical than horizontal
+                verticals.Add((i, line));
+        }
+
+        _logger.LogInformation("NTS: Found {H} horizontal and {V} vertical lines", horizontals.Count, verticals.Count);
+
+        var modified = new Dictionary<int, RawPath>();
+
+        // For each horizontal line, find the nearest vertical line for each endpoint
+        foreach (var (hIdx, hLine) in horizontals)
+        {
+            var hStart = hLine.Points[0];
+            var hEnd = hLine.Points[1];
+            var hY = (hStart.Y + hEnd.Y) / 2; // Y coordinate of horizontal line
+            var hMinX = Math.Min(hStart.X, hEnd.X);
+            var hMaxX = Math.Max(hStart.X, hEnd.X);
+
+            // Find best vertical line for left endpoint
+            int bestLeftVIdx = -1;
+            double bestLeftDist = double.MaxValue;
+            double bestLeftVX = 0;
+
+            // Find best vertical line for right endpoint
+            int bestRightVIdx = -1;
+            double bestRightDist = double.MaxValue;
+            double bestRightVX = 0;
+
+            foreach (var (vIdx, vLine) in verticals)
+            {
+                var vStart = vLine.Points[0];
+                var vEnd = vLine.Points[1];
+                var vX = (vStart.X + vEnd.X) / 2;
+                var vMinY = Math.Min(vStart.Y, vEnd.Y);
+                var vMaxY = Math.Max(vStart.Y, vEnd.Y);
+
+                // Check if vertical line's Y range covers the horizontal line's Y (within tolerance)
+                if (hY < vMinY - snapTolerance || hY > vMaxY + snapTolerance)
+                    continue;
+
+                // Check distance to left endpoint
+                var leftDist = Math.Abs(vX - hMinX);
+                if (leftDist < bestLeftDist && leftDist < snapTolerance * 3)
+                {
+                    bestLeftDist = leftDist;
+                    bestLeftVIdx = vIdx;
+                    bestLeftVX = vX;
+                }
+
+                // Check distance to right endpoint
+                var rightDist = Math.Abs(vX - hMaxX);
+                if (rightDist < bestRightDist && rightDist < snapTolerance * 3)
+                {
+                    bestRightDist = rightDist;
+                    bestRightVIdx = vIdx;
+                    bestRightVX = vX;
+                }
+            }
+
+            // Extend left endpoint to best vertical line
+            if (bestLeftVIdx >= 0)
+            {
+                var intersection = new Point2D { X = bestLeftVX, Y = hY };
+                var currentLine = modified.ContainsKey(hIdx) ? modified[hIdx] : hLine;
+                var newPoints = new List<Point2D>(currentLine.Points);
+                var leftIdx = currentLine.Points[0].X < currentLine.Points[1].X ? 0 : 1;
+                newPoints[leftIdx] = intersection;
+                modified[hIdx] = ClonePathWithNewPoints(currentLine, newPoints);
+
+                // Also extend the vertical line
+                var vLine = verticals.First(v => v.idx == bestLeftVIdx).path;
+                var currentVLine = modified.ContainsKey(bestLeftVIdx) ? modified[bestLeftVIdx] : vLine;
+                var vNewPoints = new List<Point2D>(currentVLine.Points);
+                var topIdx = currentVLine.Points[0].Y > currentVLine.Points[1].Y ? 0 : 1;
+                var bottomIdx = 1 - topIdx;
+                if (Math.Abs(hY - currentVLine.Points[topIdx].Y) < snapTolerance * 2)
+                {
+                    vNewPoints[topIdx] = intersection;
+                    modified[bestLeftVIdx] = ClonePathWithNewPoints(currentVLine, vNewPoints);
+                }
+                else if (Math.Abs(hY - currentVLine.Points[bottomIdx].Y) < snapTolerance * 2)
+                {
+                    vNewPoints[bottomIdx] = intersection;
+                    modified[bestLeftVIdx] = ClonePathWithNewPoints(currentVLine, vNewPoints);
+                }
+
+                _logger.LogInformation("NTS: Extended H{H} left to V{V} at ({X:F1},{Y:F1})",
+                    hIdx, bestLeftVIdx, intersection.X, intersection.Y);
+            }
+
+            // Extend right endpoint to best vertical line
+            if (bestRightVIdx >= 0)
+            {
+                var intersection = new Point2D { X = bestRightVX, Y = hY };
+                var currentLine = modified.ContainsKey(hIdx) ? modified[hIdx] : hLine;
+                var newPoints = new List<Point2D>(currentLine.Points);
+                var rightIdx = currentLine.Points[0].X > currentLine.Points[1].X ? 0 : 1;
+                newPoints[rightIdx] = intersection;
+                modified[hIdx] = ClonePathWithNewPoints(currentLine, newPoints);
+
+                // Also extend the vertical line
+                var vLine = verticals.First(v => v.idx == bestRightVIdx).path;
+                var currentVLine = modified.ContainsKey(bestRightVIdx) ? modified[bestRightVIdx] : vLine;
+                var vNewPoints = new List<Point2D>(currentVLine.Points);
+                var topIdx = currentVLine.Points[0].Y > currentVLine.Points[1].Y ? 0 : 1;
+                var bottomIdx = 1 - topIdx;
+                if (Math.Abs(hY - currentVLine.Points[topIdx].Y) < snapTolerance * 2)
+                {
+                    vNewPoints[topIdx] = intersection;
+                    modified[bestRightVIdx] = ClonePathWithNewPoints(currentVLine, vNewPoints);
+                }
+                else if (Math.Abs(hY - currentVLine.Points[bottomIdx].Y) < snapTolerance * 2)
+                {
+                    vNewPoints[bottomIdx] = intersection;
+                    modified[bestRightVIdx] = ClonePathWithNewPoints(currentVLine, vNewPoints);
+                }
+
+                _logger.LogInformation("NTS: Extended H{H} right to V{V} at ({X:F1},{Y:F1})",
+                    hIdx, bestRightVIdx, intersection.X, intersection.Y);
+            }
+        }
+
+        // Build result: use modified lines where available, original otherwise
+        var result = new List<RawPath>();
+        for (int i = 0; i < lineSegments.Count; i++)
+        {
+            result.Add(modified.ContainsKey(i) ? modified[i] : lineSegments[i]);
+        }
+        result.AddRange(otherPaths);
+
+        _logger.LogInformation("NTS: Modified {Count} lines", modified.Count);
+        return result;
+    }
+
+    private static double Distance(Point2D p1, Point2D p2)
+    {
+        return Math.Sqrt(Math.Pow(p1.X - p2.X, 2) + Math.Pow(p1.Y - p2.Y, 2));
+    }
+
+    private Point2D? ComputeIntersection(Point2D a1, Point2D a2, Point2D b1, Point2D b2)
+    {
+        // Line 1: P = a1 + t * (a2 - a1)
+        // Line 2: P = b1 + s * (b2 - b1)
+        double dx1 = a2.X - a1.X;
+        double dy1 = a2.Y - a1.Y;
+        double dx2 = b2.X - b1.X;
+        double dy2 = b2.Y - b1.Y;
+
+        double cross = dx1 * dy2 - dy1 * dx2;
+        if (Math.Abs(cross) < 1e-10) // Lines are parallel
+            return null;
+
+        double t = ((b1.X - a1.X) * dy2 - (b1.Y - a1.Y) * dx2) / cross;
+
+        return new Point2D
+        {
+            X = a1.X + t * dx1,
+            Y = a1.Y + t * dy1
+        };
+    }
+
+    private RawPath ClonePathWithNewPoints(RawPath original, List<Point2D> newPoints)
+    {
+        var start = newPoints[0];
+        var end = newPoints[newPoints.Count - 1];
+        return new RawPath
+        {
+            Points = newPoints,
+            LineWidth = original.LineWidth,
+            IsStroked = original.IsStroked,
+            IsFilled = original.IsFilled,
+            SegmentCount = original.SegmentCount,
+            PathLength = Math.Sqrt(Math.Pow(end.X - start.X, 2) + Math.Pow(end.Y - start.Y, 2)),
+            PathType = original.PathType,
+            ObjectIndex = original.ObjectIndex
+        };
+    }
+
+    /// <summary>
     /// Bridge small gaps by merging line segments that have endpoints within gapTolerance distance
     /// Uses iterative merging to connect all segments that should be bridged
     /// </summary>
@@ -68,7 +443,16 @@ public class NtsPolygonizer
         if (gapTolerance <= 0 || paths.Count == 0)
             return paths;
 
-        _logger.LogInformation("NTS: Bridging gaps with tolerance {Tolerance} for {Count} paths",
+        // Log path details before bridging
+            foreach (var p in paths)
+            {
+                var start = p.Points[0];
+                var end = p.Points[p.Points.Count - 1];
+                _logger.LogInformation("NTS: Input path {Index}: {PointCount} points, start=({StartX:F1},{StartY:F1}), end=({EndX:F1},{EndY:F1})",
+                    paths.IndexOf(p), p.Points.Count, start.X, start.Y, end.X, end.Y);
+            }
+
+            _logger.LogInformation("NTS: Bridging gaps with tolerance {Tolerance} for {Count} paths",
             gapTolerance, paths.Count);
 
         try
@@ -721,7 +1105,8 @@ public class NtsPolygonizer
                 return _geometryFactory.CreatePolygon(ring);
             }).ToList();
 
-            // Find polygons that are not contained by any other polygon
+            // Find polygons that ARE contained by at least one other polygon
+            // These are the room interiors (contained within the outer wall boundary)
             var innerPolygons = new List<Polygon>();
 
             for (int i = 0; i < ntsPolygons.Count; i++)
@@ -740,8 +1125,8 @@ public class NtsPolygonizer
                     }
                 }
 
-                // Keep polygons that are NOT contained (inner boundaries)
-                if (!isContained)
+                // Keep polygons that ARE contained (room interiors inside outer walls)
+                if (isContained)
                 {
                     innerPolygons.Add(ntsPolygons[i]);
                 }
@@ -843,6 +1228,55 @@ public class NtsPolygonizer
             minArea, boundaries.Count, filtered.Count);
 
         return filtered;
+    }
+
+    /// <summary>
+    /// Filter out thin strip polygons based on minimum width.
+    /// Calculates the minimum width of the polygon's bounding box
+    /// and filters out polygons where the width is less than the threshold.
+    /// </summary>
+    /// <param name="boundaries">List of boundaries to filter</param>
+    /// <param name="minWidth">Minimum width in units. Polygons narrower than this are filtered.</param>
+    public List<RoomBoundary> FilterByMinWidth(List<RoomBoundary> boundaries, double minWidth)
+    {
+        if (boundaries.Count == 0 || minWidth <= 0)
+            return boundaries;
+
+        _logger.LogInformation("NTS: Filtering by min width {MinWidth:F2}", minWidth);
+
+        var result = new List<RoomBoundary>();
+
+        foreach (var boundary in boundaries)
+        {
+            var coords = boundary.Polygon.Select(p => new Coordinate(p.X, p.Y)).ToArray();
+            if (!coords[0].Equals2D(coords[^1]))
+            {
+                coords = coords.Append(coords[0]).ToArray();
+            }
+            var ring = _geometryFactory.CreateLinearRing(coords);
+            var polygon = _geometryFactory.CreatePolygon(ring);
+
+            var envelope = polygon.EnvelopeInternal;
+            var width = Math.Min(envelope.Width, envelope.Height);
+
+            _logger.LogInformation("NTS: Polygon - Min dimension: {Width:F2}, BBox: {EnvWidth:F2} x {EnvHeight:F2}",
+                width, envelope.Width, envelope.Height);
+
+            if (width >= minWidth)
+            {
+                result.Add(boundary);
+            }
+            else
+            {
+                _logger.LogInformation("NTS: Removed thin strip polygon (width {Width:F2} < {Min:F2})",
+                    width, minWidth);
+            }
+        }
+
+        _logger.LogInformation("NTS: Filtered by min width: {Original} → {Filtered}",
+            boundaries.Count, result.Count);
+
+        return result;
     }
 }
 

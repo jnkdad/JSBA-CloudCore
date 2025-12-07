@@ -395,6 +395,18 @@ namespace JSBA.CloudCore.Extractor
                     _logger.LogInformation("PDFium Native: After filtering: {FilteredCount} paths (removed {RemovedCount})",
                         processedPaths.Count, AllPaths.Count - processedPaths.Count);
 
+                    // Collapse parallel wall lines (for PDFs where walls have thickness)
+                    if (settings.Polygon.WallThickness > 0)
+                    {
+                        processedPaths = _ntsPolygonizer.CollapseParallelWalls(processedPaths, settings.Polygon.WallThickness);
+                        _logger.LogInformation("PDFium Native: After collapsing parallel walls: {Count} paths", processedPaths.Count);
+
+                        // After collapsing, extend lines to meet at intersection points
+                        // Use wallThickness * 4 as snap tolerance to handle door gaps and wall offsets
+                        processedPaths = _ntsPolygonizer.ExtendLinesToIntersections(processedPaths, settings.Polygon.WallThickness * 4);
+                        _logger.LogInformation("PDFium Native: After extending to intersections: {Count} paths", processedPaths.Count);
+                    }
+
                     // Apply gap bridging using NTS (much faster than custom implementation)
                     if (settings.Polygon.GapTolerance > 0)
                     {
@@ -431,6 +443,14 @@ namespace JSBA.CloudCore.Extractor
                 {
                     roomBoundaries = _ntsPolygonizer.FilterByMinArea(roomBoundaries, settings.Polygon.MinArea);
                     _logger.LogInformation("PDFium Native: After min area filter ({MinArea}): {Count} boundaries", settings.Polygon.MinArea, roomBoundaries.Count);
+                }
+
+                // Filter out thin strip polygons by minimum width
+                // This removes polygons that form between parallel wall lines (wall thickness artifacts)
+                if (settings?.Polygon.MinWidth > 0)
+                {
+                    roomBoundaries = _ntsPolygonizer.FilterByMinWidth(roomBoundaries, settings.Polygon.MinWidth);
+                    _logger.LogInformation("PDFium Native: After min width filter ({MinWidth}): {Count} boundaries", settings.Polygon.MinWidth, roomBoundaries.Count);
                 }
 
                 // Add to boundaries list

@@ -85,7 +85,8 @@
       "polygon": {
         "removeNested": false,
         "removeOuter": true,
-        "gapTolerance": 50
+        "gapTolerance": 50,
+        "minArea": 1000
       },
       "roomSize": {
         "enabled": false,
@@ -164,7 +165,7 @@
         },
         "length": {
           "enabled": true,
-          "minLength": 50.0
+          "minLength": 150.0
         },
         "shape": {
           "enabled": false,
@@ -177,9 +178,11 @@
       },
       "polygon": {
         "removeNested": false,
-        "removeOuter": true,
-        "gapTolerance": 80.0,
-        "minArea": 50.0
+        "removeOuter": false,
+        "gapTolerance": 0,
+        "minArea": 50,
+        "minWidth": 20,
+        "wallThickness": 10
       },
       "roomSize": {
         "enabled": false,
@@ -209,9 +212,11 @@
       },
       "polygon": {
         "removeNested": false,
-        "removeOuter": true,
-        "gapTolerance": 80.0,
-        "minArea": 50
+        "removeOuter": false,
+        "gapTolerance": 0,
+        "minArea": 50,
+        "minWidth": 20,
+        "wallThickness": 10
       },
       "roomSize": {
         "enabled": false,
