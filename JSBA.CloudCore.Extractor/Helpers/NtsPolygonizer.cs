@@ -199,6 +199,10 @@ public class NtsPolygonizer
             centerEnd = new Point2D { X = (end1.X + start2.X) / 2, Y = (end1.Y + start2.Y) / 2 };
         }
 
+        // The actual wall thickness is the perpendicular distance between the two parallel lines
+        // We already calculated this as 'dist' above
+        double actualWallThickness = dist;
+
         centerPath = new RawPath
         {
             Points = new List<Point2D> { centerStart, centerEnd },
@@ -207,7 +211,9 @@ public class NtsPolygonizer
             IsFilled = path1.IsFilled,
             SegmentCount = 1,
             PathLength = Math.Sqrt(Math.Pow(centerEnd.X - centerStart.X, 2) + Math.Pow(centerEnd.Y - centerStart.Y, 2)),
-            PathType = path1.PathType,
+            PathType = "Centerline", // Legacy string type
+            PathTypeEnum = PathTypeEnum.Centerline, // New enum type
+            WallThickness = actualWallThickness, // Store the actual measured wall thickness
             ObjectIndex = path1.ObjectIndex
         };
 
@@ -390,6 +396,34 @@ public class NtsPolygonizer
         return result;
     }
 
+    /// <summary>
+    /// Calculate the wall thickness to use for polygon insetting.
+    /// Returns the minimum wall thickness from all centerline paths, or 0 if no centerlines found.
+    /// </summary>
+    public double CalculateWallThicknessForInset(List<RawPath> paths)
+    {
+        var centerlineThicknesses = paths
+            .Where(p => p.PathTypeEnum == PathTypeEnum.Centerline && p.WallThickness > 0)
+            .Select(p => p.WallThickness)
+            .ToList();
+
+        if (centerlineThicknesses.Count == 0)
+        {
+            _logger.LogDebug("NTS: No centerline paths with wall thickness found");
+            return 0;
+        }
+
+        // Use minimum thickness (most conservative - won't over-inset thin walls)
+        double minThickness = centerlineThicknesses.Min();
+        double maxThickness = centerlineThicknesses.Max();
+        double avgThickness = centerlineThicknesses.Average();
+
+        _logger.LogInformation("NTS: Wall thickness from centerlines - Min: {Min:F2}, Max: {Max:F2}, Avg: {Avg:F2}, using Min",
+            minThickness, maxThickness, avgThickness);
+
+        return minThickness;
+    }
+
     private static double Distance(Point2D p1, Point2D p2)
     {
         return Math.Sqrt(Math.Pow(p1.X - p2.X, 2) + Math.Pow(p1.Y - p2.Y, 2));
@@ -430,6 +464,8 @@ public class NtsPolygonizer
             SegmentCount = original.SegmentCount,
             PathLength = Math.Sqrt(Math.Pow(end.X - start.X, 2) + Math.Pow(end.Y - start.Y, 2)),
             PathType = original.PathType,
+            PathTypeEnum = original.PathTypeEnum,
+            WallThickness = original.WallThickness,
             ObjectIndex = original.ObjectIndex
         };
     }
@@ -467,6 +503,8 @@ public class NtsPolygonizer
                 SegmentCount = p.SegmentCount,
                 PathLength = p.PathLength,
                 PathType = p.PathType,
+                PathTypeEnum = p.PathTypeEnum,
+                WallThickness = p.WallThickness,
                 ObjectIndex = p.ObjectIndex
             }).ToList();
 
@@ -804,6 +842,8 @@ public class NtsPolygonizer
             SegmentCount = mergedPoints.Count,
             PathLength = CalculatePathLength(mergedPoints),
             PathType = "Polyline", // Merged paths are polylines
+            PathTypeEnum = PathTypeEnum.Merged, // Mark as merged
+            WallThickness = Math.Max(path1.WallThickness, path2.WallThickness), // Preserve wall thickness if present
             ObjectIndex = Math.Min(path1.ObjectIndex, path2.ObjectIndex) // Keep original index
         };
     }
@@ -899,7 +939,8 @@ public class NtsPolygonizer
                 {
                     Points = points,
                     LineWidth = lineWidth,
-                    PathLength = lineString.Length
+                    PathLength = lineString.Length,
+                    PathTypeEnum = PathTypeEnum.Original
                 });
             }
         }
@@ -1077,6 +1118,94 @@ public class NtsPolygonizer
             _logger.LogError(ex, "NTS: Polygon reconstruction failed");
             return new List<RoomBoundary>();
         }
+    }
+
+    /// <summary>
+    /// Inset (shrink) polygons by half the wall thickness to get inner boundaries.
+    /// This is used after polygon reconstruction to convert centerline-based polygons
+    /// into proper inner boundary polygons.
+    /// </summary>
+    public List<RoomBoundary> InsetPolygons(List<RoomBoundary> boundaries, double wallThickness)
+    {
+        if (wallThickness <= 0 || boundaries.Count == 0)
+            return boundaries;
+
+        double insetAmount = wallThickness / 2.0;
+        _logger.LogInformation("NTS: Insetting {Count} polygons by {Inset:F2} (half of wall thickness {Thickness:F2})",
+            boundaries.Count, insetAmount, wallThickness);
+
+        var result = new List<RoomBoundary>();
+
+        foreach (var boundary in boundaries)
+        {
+            try
+            {
+                // Convert to NTS Polygon
+                var coords = boundary.Polygon.Select(p => new Coordinate(p.X, p.Y)).ToList();
+
+                // Ensure closed ring
+                if (coords.Count > 0 && !coords[0].Equals2D(coords[^1]))
+                {
+                    coords.Add(new Coordinate(coords[0].X, coords[0].Y));
+                }
+
+                if (coords.Count < 4)
+                {
+                    _logger.LogDebug("NTS: Skipping polygon with too few points: {Count}", coords.Count);
+                    continue;
+                }
+
+                var ring = _geometryFactory.CreateLinearRing(coords.ToArray());
+                var polygon = _geometryFactory.CreatePolygon(ring);
+
+                if (!polygon.IsValid)
+                {
+                    _logger.LogDebug("NTS: Skipping invalid polygon before inset");
+                    continue;
+                }
+
+                // Use negative buffer to shrink the polygon
+                var insetGeometry = polygon.Buffer(-insetAmount);
+
+                if (insetGeometry.IsEmpty)
+                {
+                    _logger.LogDebug("NTS: Polygon became empty after inset (was too thin), original area: {Area:F2}", polygon.Area);
+                    continue;
+                }
+
+                // Handle both Polygon and MultiPolygon results (buffer can split a polygon)
+                if (insetGeometry is Polygon insetPolygon)
+                {
+                    if (insetPolygon.IsValid && insetPolygon.Area > 0)
+                    {
+                        result.Add(ToRoomBoundary(insetPolygon));
+                        _logger.LogDebug("NTS: Inset polygon from area {Original:F2} to {Inset:F2}",
+                            polygon.Area, insetPolygon.Area);
+                    }
+                }
+                else if (insetGeometry is MultiPolygon multiPolygon)
+                {
+                    // Buffer can sometimes create multiple polygons (e.g., if polygon was very thin in the middle)
+                    for (int i = 0; i < multiPolygon.NumGeometries; i++)
+                    {
+                        if (multiPolygon.GetGeometryN(i) is Polygon p && p.IsValid && p.Area > 0)
+                        {
+                            result.Add(ToRoomBoundary(p));
+                            _logger.LogDebug("NTS: Inset multipolygon part {Index}, area: {Area:F2}", i, p.Area);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "NTS: Failed to inset polygon");
+            }
+        }
+
+        _logger.LogInformation("NTS: Inset complete: {Original} polygons -> {Result} polygons",
+            boundaries.Count, result.Count);
+
+        return result;
     }
 
     /// <summary>

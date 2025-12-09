@@ -421,6 +421,24 @@ namespace JSBA.CloudCore.Extractor
                 var roomBoundaries = _ntsPolygonizer.ReconstructPolygons(processedPaths);
                 _logger.LogInformation("PDFium Native: NTS reconstructed {PolygonCount} polygons", roomBoundaries.Count);
 
+                // Inset polygons by half wall thickness to get inner boundaries
+                // This converts centerline-based polygons to proper inner room boundaries
+                // Use the actual measured wall thickness from centerline paths, not the settings value
+                if (settings?.Polygon.WallThickness > 0)
+                {
+                    double actualWallThickness = _ntsPolygonizer.CalculateWallThicknessForInset(processedPaths);
+                    if (actualWallThickness > 0)
+                    {
+                        roomBoundaries = _ntsPolygonizer.InsetPolygons(roomBoundaries, actualWallThickness);
+                        _logger.LogInformation("PDFium Native: After insetting by half wall thickness ({Thickness:F2}): {Count} polygons",
+                            actualWallThickness, roomBoundaries.Count);
+                    }
+                    else
+                    {
+                        _logger.LogInformation("PDFium Native: No centerline paths found, skipping polygon inset");
+                    }
+                }
+
                 // Store for visualization (convert back to List<Point2D> format)
                 ClosedPolygons = roomBoundaries.Select(b => b.Polygon).ToList();
 
@@ -1184,6 +1202,8 @@ namespace JSBA.CloudCore.Extractor
 
                 // Determine path type
                 rawPath.PathType = DeterminePathType(points, segmentCount);
+                rawPath.PathTypeEnum = PathTypeEnum.Original; // All paths from PDF are original
+                rawPath.WallThickness = 0; // No wall thickness for original paths
 
                 return rawPath;
             }
@@ -1798,6 +1818,8 @@ namespace JSBA.CloudCore.Extractor
                     SegmentCount = segment.Points.Count,
                     PathLength = CalculatePathLength(segment.Points),
                     PathType = DeterminePathType(segment.Points, segment.Points.Count),
+                    PathTypeEnum = segment.OriginalPath.PathTypeEnum,
+                    WallThickness = segment.OriginalPath.WallThickness,
                     ObjectIndex = segment.OriginalPath.ObjectIndex
                 };
                 result.Add(rawPath);
