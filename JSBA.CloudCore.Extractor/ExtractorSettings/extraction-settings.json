@@ -182,7 +182,8 @@
         "gapTolerance": 10,
         "minArea": 50,
         "minWidth": 20,
-        "wallThickness": 5
+        "wallThickness": 5,
+        "skipCollapseParallelWalls": true
       },
       "roomSize": {
         "enabled": false,
@@ -247,10 +248,11 @@
       "polygon": {
         "removeNested": false,
         "removeOuter": false,
-        "gapTolerance": 0,
+        "gapTolerance": 10,
         "minArea": 50,
         "minWidth": 20,
-        "wallThickness": 10
+        "wallThickness": 10,
+        "skipCollapseParallelWalls": false
       },
       "roomSize": {
         "enabled": false,
