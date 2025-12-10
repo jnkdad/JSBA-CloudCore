@@ -55,11 +55,17 @@ namespace JSBA.CloudCore.Tests
             VisualizePathsForPdf("Multiple rooms with room tags (no noise)_tworooms.pdf", expectedBoundaryCount: 2);
         }
 
-        //[Fact]
-        //public void VisualizePaths_WithPdf_MultipleRoomsWithRoomTags()
-        //{
-        //    VisualizePathsForPdf("Multiple rooms with room tags (no noise).pdf", expectedBoundaryCount: 5);
-        //}
+        [Fact]
+        public void VisualizePaths_WithPdf_MultipleRoomsWithRoomTags_TwoRooms_2()
+        {
+            VisualizePathsForPdf("Multiple rooms with room tags (no noise)_tworooms_2.pdf", expectedBoundaryCount: 2);
+        }
+
+        [Fact]
+        public void VisualizePaths_WithPdf_MultipleRoomsWithRoomTags()
+        {
+            VisualizePathsForPdf("Multiple rooms with room tags (no noise).pdf", expectedBoundaryCount: 5);
+        }
 
         /// <summary>
         /// Helper method to visualize paths for a given PDF file
@@ -90,11 +96,14 @@ namespace JSBA.CloudCore.Tests
 
             // Create unique output file names based on test name
             var safeTestName = testName;
-            var rawPathsOutput = Path.Combine(Path.GetTempPath(), $"raw_paths_{safeTestName}.png");
+            var mergedbridgedPathsOutput = Path.Combine(Path.GetTempPath(), $"mergedbridged_paths_{safeTestName}.png");
+            var filterdPathsOutput = Path.Combine(Path.GetTempPath(), $"filtered_paths_{safeTestName}.png");
             var closedPolygonsOutput = Path.Combine(Path.GetTempPath(), $"closed_polygons_{safeTestName}.png");
             var finalBoundariesOutput = Path.Combine(Path.GetTempPath(), $"final_boundaries_{safeTestName}.png");
 
-            TestHelper.VisualizeRawPaths(_engine.AllPaths, _engine.PageWidth, _engine.PageHeight, rawPathsOutput);
+            TestHelper.VisualizeRawPaths(_engine.AllPaths, _engine.PageWidth, _engine.PageHeight, mergedbridgedPathsOutput);
+            TestHelper.VisualizeRawPaths(_engine.FilteredPaths, _engine.PageWidth, _engine.PageHeight, filterdPathsOutput);
+
             TestHelper.VisualizePaths(_engine.ClosedPolygons, _engine.PageWidth, _engine.PageHeight, closedPolygonsOutput);
 
             // Visualize final boundaries (after removing outer polygons)
@@ -102,7 +111,8 @@ namespace JSBA.CloudCore.Tests
             TestHelper.VisualizePaths(finalBoundaryPolygons, _engine.PageWidth, _engine.PageHeight, finalBoundariesOutput);
 
             // Assert
-            Assert.True(File.Exists(rawPathsOutput), $"Raw paths visualization should be created");
+            Assert.True(File.Exists(filterdPathsOutput), $"Filered paths visualization should be created");
+            Assert.True(File.Exists(mergedbridgedPathsOutput), $"Merged-bridged paths visualization should be created");
             Assert.True(File.Exists(closedPolygonsOutput), $"Closed polygons visualization should be created");
             Assert.True(File.Exists(finalBoundariesOutput), $"Final boundaries visualization should be created");
             Assert.Equal(expectedBoundaryCount, boundaries.Count);
@@ -112,7 +122,8 @@ namespace JSBA.CloudCore.Tests
             _output.WriteLine($"Total raw paths: {_engine.AllPaths.Count}");
             _output.WriteLine($"Total closed polygons: {_engine.ClosedPolygons.Count}");
             _output.WriteLine($"Total final boundaries: {boundaries.Count} (expected: {expectedBoundaryCount})");
-            _output.WriteLine($"Raw paths saved to: {rawPathsOutput}");
+            _output.WriteLine($"filered paths saved to: {filterdPathsOutput}");
+            _output.WriteLine($"merged-bridged paths saved to: {mergedbridgedPathsOutput}");
             _output.WriteLine($"Closed polygons saved to: {closedPolygonsOutput}");
             _output.WriteLine($"Final boundaries saved to: {finalBoundariesOutput}");
             _output.WriteLine($"Compare all three images to see the processing pipeline!");

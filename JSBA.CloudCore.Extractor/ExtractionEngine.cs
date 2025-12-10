@@ -45,6 +45,12 @@ namespace JSBA.CloudCore.Extractor
         public List<RawPath> AllPaths { get; private set; } = new();
 
         /// <summary>
+        /// Paths filtered
+        /// Useful for debugging, visualization
+        /// </summary>
+        public List<RawPath> FilteredPaths { get; private set; } = new();
+
+        /// <summary>
         /// Closed polygons reconstructed from raw paths during the last extraction operation.
         /// Populated by ExtractRoomBoundariesWithPDFiumNative after calling ReconstructClosedPolygons.
         /// Useful for debugging and visualization.
@@ -394,6 +400,9 @@ namespace JSBA.CloudCore.Extractor
                     processedPaths = FilterPaths(processedPaths, settings, PageWidth, PageHeight);
                     _logger.LogInformation("PDFium Native: After filtering: {FilteredCount} paths (removed {RemovedCount})",
                         processedPaths.Count, AllPaths.Count - processedPaths.Count);
+
+                    // Get raw filtered paths
+                    FilteredPaths = processedPaths;
 
                     // Collapse parallel wall lines (for PDFs where walls have thickness)
                     if (settings.Polygon.WallThickness > 0)
