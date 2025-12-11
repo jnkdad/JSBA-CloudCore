@@ -235,10 +235,35 @@ public class NtsPolygonizer
         }
 
         // Keep inner lines from parallel pairs
+        // IMPORTANT: Preserve WallThickness and mark as Centerline if it has WallThickness
+        // This ensures CalculateWallThicknessForInset can find it later
         foreach (var (i, j, inner, outer, isDiv) in parallelPairs)
         {
-            result.Add(inner);
-            _logger.LogInformation("NTS: Keeping inner line from parallel pair (paths {I} and {J})", i, j);
+            // If inner line has WallThickness, ensure it's marked as Centerline so it can be found later
+            if (inner.WallThickness > 0 && inner.PathTypeEnum != PathTypeEnum.Centerline)
+            {
+                var centerlineInner = new RawPath
+                {
+                    Points = inner.Points,
+                    LineWidth = inner.LineWidth,
+                    IsStroked = inner.IsStroked,
+                    IsFilled = inner.IsFilled,
+                    SegmentCount = inner.SegmentCount,
+                    PathLength = inner.PathLength,
+                    PathType = "Centerline",
+                    PathTypeEnum = PathTypeEnum.Centerline,
+                    WallThickness = inner.WallThickness,
+                    ObjectIndex = inner.ObjectIndex
+                };
+                result.Add(centerlineInner);
+                _logger.LogInformation("NTS: Keeping inner line from parallel pair (paths {I} and {J}) with WallThickness={Thickness:F2}, marked as Centerline", 
+                    i, j, inner.WallThickness);
+            }
+            else
+            {
+                result.Add(inner);
+                _logger.LogInformation("NTS: Keeping inner line from parallel pair (paths {I} and {J})", i, j);
+            }
         }
 
         // Split horizontal lines at dividing walls and duplicate dividing walls
@@ -714,6 +739,8 @@ public class NtsPolygonizer
         double minX = double.MaxValue, maxX = double.MinValue;
         double sumY = 0;
         double maxThickness = 0;
+        bool hasCenterline = false;
+        string? centerlinePathType = null;
 
         foreach (var line in group)
         {
@@ -721,12 +748,25 @@ public class NtsPolygonizer
             maxX = Math.Max(maxX, Math.Max(line.Points[0].X, line.Points[1].X));
             sumY += (line.Points[0].Y + line.Points[1].Y) / 2;
             maxThickness = Math.Max(maxThickness, line.WallThickness);
+            
+            // Preserve Centerline type if any path in the group has it
+            // PathTypeEnum is the primary type indicator; PathType is legacy string
+            if (line.PathTypeEnum == PathTypeEnum.Centerline)
+            {
+                hasCenterline = true;
+                // Use the PathType string from the centerline path for backward compatibility
+                centerlinePathType = line.PathType ?? "Centerline";
+            }
         }
 
         double avgY = sumY / group.Count;
 
-        _logger.LogDebug("NTS: Merged {Count} horizontal lines at Y≈{Y:F1} into single line from X={MinX:F1} to X={MaxX:F1}",
-            group.Count, avgY, minX, maxX);
+        // If merged path has WallThickness > 0, mark it as Centerline so CalculateWallThicknessForInset can find it
+        // This is important because WallThickness indicates this is a centerline path (from collapsed parallel walls)
+        bool shouldBeCenterline = hasCenterline || maxThickness > 0;
+
+        _logger.LogDebug("NTS: Merged {Count} horizontal lines at Y≈{Y:F1} into single line from X={MinX:F1} to X={MaxX:F1}, WallThickness={Thickness:F2}, Centerline={IsCenterline}",
+            group.Count, avgY, minX, maxX, maxThickness, shouldBeCenterline);
 
         return new RawPath
         {
@@ -740,8 +780,8 @@ public class NtsPolygonizer
             IsFilled = group[0].IsFilled,
             SegmentCount = 1,
             PathLength = maxX - minX,
-            PathType = group[0].PathType,
-            PathTypeEnum = group[0].PathTypeEnum,
+            PathType = shouldBeCenterline ? (centerlinePathType ?? "Centerline") : group[0].PathType,
+            PathTypeEnum = shouldBeCenterline ? PathTypeEnum.Centerline : group[0].PathTypeEnum,
             WallThickness = maxThickness,
             ObjectIndex = group.Min(l => l.ObjectIndex)
         };
@@ -839,6 +879,8 @@ public class NtsPolygonizer
         double minY = double.MaxValue, maxY = double.MinValue;
         double sumX = 0;
         double maxThickness = 0;
+        bool hasCenterline = false;
+        string? centerlinePathType = null;
 
         foreach (var line in group)
         {
@@ -846,12 +888,25 @@ public class NtsPolygonizer
             maxY = Math.Max(maxY, Math.Max(line.Points[0].Y, line.Points[1].Y));
             sumX += (line.Points[0].X + line.Points[1].X) / 2;
             maxThickness = Math.Max(maxThickness, line.WallThickness);
+            
+            // Preserve Centerline type if any path in the group has it
+            // PathTypeEnum is the primary type indicator; PathType is legacy string
+            if (line.PathTypeEnum == PathTypeEnum.Centerline)
+            {
+                hasCenterline = true;
+                // Use the PathType string from the centerline path for backward compatibility
+                centerlinePathType = line.PathType ?? "Centerline";
+            }
         }
 
         double avgX = sumX / group.Count;
 
-        _logger.LogDebug("NTS: Merged {Count} vertical lines at X≈{X:F1} into single line from Y={MinY:F1} to Y={MaxY:F1}",
-            group.Count, avgX, minY, maxY);
+        // If merged path has WallThickness > 0, mark it as Centerline so CalculateWallThicknessForInset can find it
+        // This is important because WallThickness indicates this is a centerline path (from collapsed parallel walls)
+        bool shouldBeCenterline = hasCenterline || maxThickness > 0;
+
+        _logger.LogDebug("NTS: Merged {Count} vertical lines at X≈{X:F1} into single line from Y={MinY:F1} to Y={MaxY:F1}, WallThickness={Thickness:F2}, Centerline={IsCenterline}",
+            group.Count, avgX, minY, maxY, maxThickness, shouldBeCenterline);
 
         return new RawPath
         {
@@ -865,8 +920,8 @@ public class NtsPolygonizer
             IsFilled = group[0].IsFilled,
             SegmentCount = 1,
             PathLength = maxY - minY,
-            PathType = group[0].PathType,
-            PathTypeEnum = group[0].PathTypeEnum,
+            PathType = shouldBeCenterline ? (centerlinePathType ?? "Centerline") : group[0].PathType,
+            PathTypeEnum = shouldBeCenterline ? PathTypeEnum.Centerline : group[0].PathTypeEnum,
             WallThickness = maxThickness,
             ObjectIndex = group.Min(l => l.ObjectIndex)
         };
@@ -1944,6 +1999,15 @@ public class NtsPolygonizer
     /// </summary>
     public double CalculateWallThicknessForInset(List<RawPath> paths)
     {
+        // Log all paths with WallThickness for debugging
+        var pathsWithThickness = paths.Where(p => p.WallThickness > 0).ToList();
+        _logger.LogInformation("NTS: Found {Count} paths with WallThickness > 0", pathsWithThickness.Count);
+        foreach (var p in pathsWithThickness.Take(5))
+        {
+            _logger.LogInformation("NTS: Path with WallThickness: PathTypeEnum={Type}, WallThickness={Thickness:F2}",
+                p.PathTypeEnum, p.WallThickness);
+        }
+        
         var centerlineThicknesses = paths
             .Where(p => p.PathTypeEnum == PathTypeEnum.Centerline && p.WallThickness > 0)
             .Select(p => p.WallThickness)
@@ -1951,6 +2015,20 @@ public class NtsPolygonizer
 
         if (centerlineThicknesses.Count == 0)
         {
+            // If no centerlines found but we have paths with WallThickness, use those instead
+            var thicknessPaths = paths.Where(p => p.WallThickness > 0).Select(p => p.WallThickness).ToList();
+            if (thicknessPaths.Count > 0)
+            {
+                _logger.LogWarning("NTS: No centerline paths found, but found {Count} paths with WallThickness > 0. Using those instead.",
+                    thicknessPaths.Count);
+                double fallbackMinThickness = thicknessPaths.Min();
+                double fallbackMaxThickness = thicknessPaths.Max();
+                double fallbackAvgThickness = thicknessPaths.Average();
+                _logger.LogInformation("NTS: Wall thickness from paths with thickness - Min: {Min:F2}, Max: {Max:F2}, Avg: {Avg:F2}, using Min",
+                    fallbackMinThickness, fallbackMaxThickness, fallbackAvgThickness);
+                return fallbackMinThickness;
+            }
+            
             _logger.LogDebug("NTS: No centerline paths with wall thickness found");
             return 0;
         }
@@ -2375,6 +2453,14 @@ public class NtsPolygonizer
     /// </summary>
     private RawPath CreateMergedPath(RawPath path1, RawPath path2, List<Point2D> mergedPoints)
     {
+        var maxWallThickness = Math.Max(path1.WallThickness, path2.WallThickness);
+        
+        // Preserve Centerline type if either path has it, or if merged path has WallThickness > 0
+        // This ensures CalculateWallThicknessForInset can find it later
+        bool hasCenterline = path1.PathTypeEnum == PathTypeEnum.Centerline || 
+                            path2.PathTypeEnum == PathTypeEnum.Centerline;
+        bool shouldBeCenterline = hasCenterline || maxWallThickness > 0;
+        
         return new RawPath
         {
             Points = mergedPoints,
@@ -2383,9 +2469,9 @@ public class NtsPolygonizer
             IsFilled = path1.IsFilled || path2.IsFilled,
             SegmentCount = mergedPoints.Count,
             PathLength = CalculatePathLength(mergedPoints),
-            PathType = "Polyline", // Merged paths are polylines
-            PathTypeEnum = PathTypeEnum.Merged, // Mark as merged
-            WallThickness = Math.Max(path1.WallThickness, path2.WallThickness), // Preserve wall thickness if present
+            PathType = shouldBeCenterline ? "Centerline" : "Polyline",
+            PathTypeEnum = shouldBeCenterline ? PathTypeEnum.Centerline : PathTypeEnum.Merged,
+            WallThickness = maxWallThickness, // Preserve wall thickness if present
             ObjectIndex = Math.Min(path1.ObjectIndex, path2.ObjectIndex) // Keep original index
         };
     }

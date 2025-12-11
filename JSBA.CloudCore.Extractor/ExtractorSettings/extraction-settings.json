@@ -182,7 +182,7 @@
         "gapTolerance": 10,
         "minArea": 50,
         "minWidth": 20,
-        "wallThickness": 5,
+        "maxWallThickness": 5,
         "skipCollapseParallelWalls": true
       },
       "roomSize": {
@@ -217,7 +217,7 @@
         "gapTolerance": 0,
         "minArea": 50,
         "minWidth": 20,
-        "wallThickness": 10
+        "maxWallThickness": 10
       },
       "roomSize": {
         "enabled": false,
@@ -251,7 +251,7 @@
         "gapTolerance": 10,
         "minArea": 50,
         "minWidth": 20,
-        "wallThickness": 10,
+        "maxWallThickness": 10,
         "skipCollapseParallelWalls": false
       },
       "roomSize": {

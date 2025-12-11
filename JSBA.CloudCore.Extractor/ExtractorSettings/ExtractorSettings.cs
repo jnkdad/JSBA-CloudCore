@@ -219,7 +219,7 @@ namespace JSBA.CloudCore.Extractor
         public double GapTolerance { get; set; } = 50; // Tolerance for connecting segments
         public double MinArea { get; set; } = 0; // Minimum polygon area (0 = no filter)
         public double MinWidth { get; set; } = 0; // Minimum polygon width (0 = no filter, filters thin strips)
-        public double WallThickness { get; set; } = 0; // Wall thickness for collapsing parallel lines (0 = disabled)
+        public double MaxWallThickness { get; set; } = 0; // Maximum wall thickness tolerance for collapsing parallel lines (0 = disabled)
         public bool SkipCollapseParallelWalls { get; set; } = false; // Skip collapsing parallel walls, keep both inner and outer lines to help find separate room boundaries
     }
 
