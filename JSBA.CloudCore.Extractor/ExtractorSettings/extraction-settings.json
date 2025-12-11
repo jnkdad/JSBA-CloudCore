@@ -71,7 +71,7 @@
         },
         "length": {
           "enabled": true,
-          "minLength": 20.0
+          "minLength": 25.0
         },
         "shape": {
           "enabled": false,
@@ -86,7 +86,7 @@
         "removeNested": false,
         "removeOuter": true,
         "gapTolerance": 50,
-        "minArea": 1000
+        "minWidth": 25
       },
       "roomSize": {
         "enabled": false,

@@ -409,16 +409,19 @@ namespace JSBA.CloudCore.Extractor
                     // polygon reconstruction find separate room boundaries. Set SkipCollapseParallelWalls=true to test.
                     if (settings.Polygon.MaxWallThickness > 0)
                     {
+                        // Set MaxWallThickness as member variable so it's available to all operations
+                        _ntsPolygonizer.SetMaxWallThickness(settings.Polygon.MaxWallThickness);
+                        
                         if (!settings.Polygon.SkipCollapseParallelWalls)
                         {
-                            processedPaths = _ntsPolygonizer.CollapseParallelWalls(processedPaths, settings.Polygon.MaxWallThickness);
+                            processedPaths = _ntsPolygonizer.CollapseParallelWalls(processedPaths);
                             _logger.LogInformation("PDFium Native: After collapsing parallel walls: {Count} paths", processedPaths.Count);
                         }
                         else
                         {
                             _logger.LogInformation("PDFium Native: Skipping collapse parallel walls - keeping both inner and outer lines: {Count} paths", processedPaths.Count);
                             // Extract inner boundaries from double lines to help form separate room boundaries
-                            processedPaths = _ntsPolygonizer.ExtractInnerBoundaries(processedPaths, settings.Polygon.MaxWallThickness);
+                            processedPaths = _ntsPolygonizer.ExtractInnerBoundaries(processedPaths);
                             _logger.LogInformation("PDFium Native: After extracting inner boundaries: {Count} paths", processedPaths.Count);
                         }
 

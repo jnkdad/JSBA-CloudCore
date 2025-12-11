@@ -13,11 +13,26 @@ public class NtsPolygonizer
 {
     private readonly ILogger<NtsPolygonizer> _logger;
     private readonly GeometryFactory _geometryFactory;
+    
+    /// <summary>
+    /// Maximum wall thickness tolerance for operations like collapsing parallel walls.
+    /// Set via SetMaxWallThickness() before calling operations that need it.
+    /// </summary>
+    private double _maxWallThickness = 0;
 
     public NtsPolygonizer(ILogger<NtsPolygonizer> logger)
     {
         _logger = logger;
         _geometryFactory = new GeometryFactory();
+    }
+    
+    /// <summary>
+    /// Set the maximum wall thickness tolerance for operations.
+    /// This should be called before operations that use it (e.g., CollapseParallelWalls, ExtractInnerBoundaries).
+    /// </summary>
+    public void SetMaxWallThickness(double maxWallThickness)
+    {
+        _maxWallThickness = maxWallThickness;
     }
 
     /// <summary>
@@ -62,14 +77,15 @@ public class NtsPolygonizer
     /// <summary>
     /// Collapse parallel wall lines into centerlines.
     /// This handles the case where walls are drawn with thickness (double lines).
+    /// Requires MaxWallThickness to be set via SetMaxWallThickness().
     /// </summary>
-    public List<RawPath> CollapseParallelWalls(List<RawPath> paths, double wallThickness)
+    public List<RawPath> CollapseParallelWalls(List<RawPath> paths)
     {
-        if (wallThickness <= 0 || paths.Count < 2)
+        if (_maxWallThickness <= 0 || paths.Count < 2)
             return paths;
 
         _logger.LogInformation("NTS: Collapsing parallel walls with thickness tolerance {Thickness} for {Count} paths",
-            wallThickness, paths.Count);
+            _maxWallThickness, paths.Count);
 
         var usedIndices = new HashSet<int>();
         var result = new List<RawPath>();
@@ -90,7 +106,7 @@ public class NtsPolygonizer
                 var path2 = paths[j];
 
                 // Check if these are parallel lines close together
-                if (AreParallelWallLines(path1, path2, wallThickness, out var centerPath))
+                if (AreParallelWallLines(path1, path2, out var centerPath))
                 {
                     _logger.LogInformation("NTS: Collapsed parallel paths {I} and {J} into centerline", i, j);
                     result.Add(centerPath);
@@ -117,14 +133,15 @@ public class NtsPolygonizer
     /// For parallel wall pairs, keeps the inner line (closer to room center) to help form separate room boundaries.
     /// IMPORTANT: Preserves and duplicates dividing walls so each room gets its own complete boundary.
     /// This is useful when CollapseParallelWalls loses information needed to separate adjacent rooms.
+    /// Requires MaxWallThickness to be set via SetMaxWallThickness().
     /// </summary>
-    public List<RawPath> ExtractInnerBoundaries(List<RawPath> paths, double wallThickness)
+    public List<RawPath> ExtractInnerBoundaries(List<RawPath> paths)
     {
-        if (wallThickness <= 0 || paths.Count < 2)
+        if (_maxWallThickness <= 0 || paths.Count < 2)
             return paths;
 
         _logger.LogInformation("NTS: Extracting inner boundaries from {Count} paths with wall thickness tolerance {Thickness}",
-            paths.Count, wallThickness);
+            paths.Count, _maxWallThickness);
 
         var lineSegments = paths.Where(p => p.Points.Count == 2).ToList();
         var otherPaths = paths.Where(p => p.Points.Count != 2).ToList();
@@ -166,9 +183,9 @@ public class NtsPolygonizer
                 var vMinY = Math.Min(v.Points[0].Y, v.Points[1].Y);
                 var vMaxY = Math.Max(v.Points[0].Y, v.Points[1].Y);
                 
-                bool connectsTop = Math.Abs(vMinY - topY) < wallThickness * 2;
-                bool connectsBottom = Math.Abs(vMaxY - bottomY) < wallThickness * 2;
-                bool isNotAtEdge = (vX - minX) > wallThickness && (maxX - vX) > wallThickness;
+            bool connectsTop = Math.Abs(vMinY - topY) < _maxWallThickness * 2;
+            bool connectsBottom = Math.Abs(vMaxY - bottomY) < _maxWallThickness * 2;
+            bool isNotAtEdge = (vX - minX) > _maxWallThickness && (maxX - vX) > _maxWallThickness;
                 
                 if (connectsTop && connectsBottom && isNotAtEdge)
                 {
@@ -214,7 +231,7 @@ public class NtsPolygonizer
                     continue;
 
                 // Check if parallel and close
-                if (AreParallelWallLines(path1, path2, wallThickness, out var centerPath))
+                if (AreParallelWallLines(path1, path2, out var centerPath))
                 {
                     // Determine which is inner vs outer
                     var (inner, outer) = DetermineInnerOuter(path1, path2, lineSegments);
@@ -464,9 +481,10 @@ public class NtsPolygonizer
     }
 
     /// <summary>
-    /// Check if two paths are parallel wall lines and compute their centerline
+    /// Check if two paths are parallel wall lines and compute their centerline.
+    /// Uses MaxWallThickness as the maximum distance tolerance.
     /// </summary>
-    private bool AreParallelWallLines(RawPath path1, RawPath path2, double maxDistance, out RawPath centerPath)
+    private bool AreParallelWallLines(RawPath path1, RawPath path2, out RawPath centerPath)
     {
         centerPath = null!;
 
@@ -512,7 +530,7 @@ public class NtsPolygonizer
         double c = dx1 * start1.Y - dy1 * start1.X;
         double dist = Math.Abs(a * midX + b * midY + c);
 
-        if (dist > maxDistance)
+        if (dist > _maxWallThickness)
             return false;
 
         // Check that lines overlap (project endpoints onto line)
