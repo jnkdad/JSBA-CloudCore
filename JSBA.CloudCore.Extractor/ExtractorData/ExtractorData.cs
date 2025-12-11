@@ -7,6 +7,31 @@ using JSBA.CloudCore.Contracts.Models;
 
 namespace JSBA.CloudCore.Extractor
 {
+    /// <summary>
+    /// Type of path - distinguishes between original paths and processed paths
+    /// </summary>
+    public enum PathTypeEnum
+    {
+        /// <summary>
+        /// Unknown or unclassified path type
+        /// </summary>
+        Unknown,
+
+        /// <summary>
+        /// Original path from PDF (line, rectangle, curve, etc.)
+        /// </summary>
+        Original,
+
+        /// <summary>
+        /// Centerline created by collapsing two parallel wall lines
+        /// </summary>
+        Centerline,
+
+        /// <summary>
+        /// Path created by merging multiple paths
+        /// </summary>
+        Merged
+    }
 
     /// <summary>
     /// Room label extracted from PDF text (internal use)
@@ -47,7 +72,23 @@ namespace JSBA.CloudCore.Extractor
         public bool IsFilled { get; set; }
         public int SegmentCount { get; set; }
         public double PathLength { get; set; }
-        public string PathType { get; set; } = "Unknown"; // "Line", "Rectangle", "Curve", etc.
+
+        /// <summary>
+        /// Type of path - distinguishes between original paths and processed paths (centerlines, merged, etc.)
+        /// </summary>
+        public PathTypeEnum PathTypeEnum { get; set; } = PathTypeEnum.Unknown;
+
+        /// <summary>
+        /// Legacy string-based path type for backward compatibility ("Line", "Rectangle", "Curve", etc.)
+        /// </summary>
+        public string PathType { get; set; } = "Unknown";
+
+        /// <summary>
+        /// Wall thickness for centerline paths (distance between the two parallel walls that were collapsed).
+        /// Only meaningful when PathTypeEnum == Centerline.
+        /// </summary>
+        public double WallThickness { get; set; } = 0;
+
         public string? Layer { get; set; } // Layer/OCG name if available
     }
 

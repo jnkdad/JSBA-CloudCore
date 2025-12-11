@@ -45,6 +45,12 @@ namespace JSBA.CloudCore.Extractor
         public List<RawPath> AllPaths { get; private set; } = new();
 
         /// <summary>
+        /// Paths filtered
+        /// Useful for debugging, visualization
+        /// </summary>
+        public List<RawPath> FilteredPaths { get; private set; } = new();
+
+        /// <summary>
         /// Closed polygons reconstructed from raw paths during the last extraction operation.
         /// Populated by ExtractRoomBoundariesWithPDFiumNative after calling ReconstructClosedPolygons.
         /// Useful for debugging and visualization.
@@ -395,6 +401,59 @@ namespace JSBA.CloudCore.Extractor
                     _logger.LogInformation("PDFium Native: After filtering: {FilteredCount} paths (removed {RemovedCount})",
                         processedPaths.Count, AllPaths.Count - processedPaths.Count);
 
+                    // Get raw filtered paths
+                    FilteredPaths = processedPaths;
+
+                    // Collapse parallel wall lines (for PDFs where walls have thickness)
+                    // NOTE: For rooms with dividing walls, keeping both inner and outer lines may help
+                    // polygon reconstruction find separate room boundaries. Set SkipCollapseParallelWalls=true to test.
+                    if (settings.Polygon.MaxWallThickness > 0)
+                    {
+                        // Set MaxWallThickness as member variable so it's available to all operations
+                        _ntsPolygonizer.SetMaxWallThickness(settings.Polygon.MaxWallThickness);
+                        
+                        if (!settings.Polygon.SkipCollapseParallelWalls)
+                        {
+                            processedPaths = _ntsPolygonizer.CollapseParallelWalls(processedPaths);
+                            _logger.LogInformation("PDFium Native: After collapsing parallel walls: {Count} paths", processedPaths.Count);
+                        }
+                        else
+                        {
+                            _logger.LogInformation("PDFium Native: Skipping collapse parallel walls - keeping both inner and outer lines: {Count} paths", processedPaths.Count);
+                            // Extract inner boundaries from double lines to help form separate room boundaries
+                            processedPaths = _ntsPolygonizer.ExtractInnerBoundaries(processedPaths);
+                            _logger.LogInformation("PDFium Native: After extracting inner boundaries: {Count} paths", processedPaths.Count);
+                        }
+
+                        // Merge collinear segments that are on the same line (within tolerance)
+                        // This reduces multiple short segments on the same wall to a single longer segment
+                        processedPaths = _ntsPolygonizer.MergeCollinearSegments(processedPaths, settings.Polygon.MaxWallThickness / 2);
+                        _logger.LogInformation("PDFium Native: After merging collinear segments: {Count} paths", processedPaths.Count);
+
+                        // After collapsing, extend lines to meet at intersection points
+                        // Use MaxWallThickness * 4 as snap tolerance to handle door gaps and wall offsets
+                        processedPaths = _ntsPolygonizer.ExtendLinesToIntersections(processedPaths, settings.Polygon.MaxWallThickness * 4);
+                        _logger.LogInformation("PDFium Native: After extending to intersections: {Count} paths", processedPaths.Count);
+
+                        // Filter out open lines AFTER extending
+                        // These interfere with polygon reconstruction
+                        processedPaths = _ntsPolygonizer.FilterOpenLines(processedPaths, settings.Polygon.MaxWallThickness * 2);
+                        _logger.LogInformation("PDFium Native: After filtering open lines: {Count} paths", processedPaths.Count);
+
+                        // Duplicate internal dividing walls to create separate closed boundaries for adjacent rooms
+                        // This allows the polygonizer to find multiple separate polygons instead of one large polygon
+                        // NOTE: Skip this if we already handled it in ExtractInnerBoundaries
+                        if (!settings.Polygon.SkipCollapseParallelWalls)
+                        {
+                            processedPaths = _ntsPolygonizer.DuplicateDividingWalls(processedPaths, settings.Polygon.MaxWallThickness * 2);
+                            _logger.LogInformation("PDFium Native: After duplicating dividing walls: {Count} paths", processedPaths.Count);
+                        }
+                        else
+                        {
+                            _logger.LogInformation("PDFium Native: Skipping DuplicateDividingWalls - already handled in ExtractInnerBoundaries");
+                        }
+                    }
+
                     // Apply gap bridging using NTS (much faster than custom implementation)
                     if (settings.Polygon.GapTolerance > 0)
                     {
@@ -402,12 +461,36 @@ namespace JSBA.CloudCore.Extractor
                         _logger.LogInformation("PDFium Native: After NTS gap bridging: {BridgedCount} paths", processedPaths.Count);
                     }
 
-                    AllPaths = processedPaths; // Update AllPaths for debugging/visualization
+                   AllPaths = processedPaths; // Update AllPaths for debugging/visualization
                 }
 
                 // Reconstruct closed polygons from paths using NTS Polygonizer (MUCH faster!)
+                // NOTE: Order matters - we MUST reconstruct polygons BEFORE insetting because:
+                // 1. ReconstructPolygons works on line segments (RawPath) to create polygons
+                // 2. InsetPolygons works on polygons (RoomBoundary) to shrink them
+                // 3. You cannot inset line segments - you need closed polygons first
+                // If ReconstructPolygons only finds 1 polygon when there should be 2, the issue
+                // is in the polygon reconstruction logic, not the order of operations.
                 var roomBoundaries = _ntsPolygonizer.ReconstructPolygons(processedPaths);
                 _logger.LogInformation("PDFium Native: NTS reconstructed {PolygonCount} polygons", roomBoundaries.Count);
+
+                // Inset polygons by half wall thickness to get inner boundaries
+                // This converts centerline-based polygons to proper inner room boundaries
+                // Use the actual measured wall thickness from centerline paths, not the settings value
+                if (settings?.Polygon.MaxWallThickness > 0)
+                {
+                    double actualWallThickness = _ntsPolygonizer.CalculateWallThicknessForInset(processedPaths);
+                    if (actualWallThickness > 0)
+                    {
+                        roomBoundaries = _ntsPolygonizer.InsetPolygons(roomBoundaries, actualWallThickness);
+                        _logger.LogInformation("PDFium Native: After insetting by half wall thickness ({Thickness:F2}): {Count} polygons",
+                            actualWallThickness, roomBoundaries.Count);
+                    }
+                    else
+                    {
+                        _logger.LogInformation("PDFium Native: No centerline paths found, skipping polygon inset");
+                    }
+                }
 
                 // Store for visualization (convert back to List<Point2D> format)
                 ClosedPolygons = roomBoundaries.Select(b => b.Polygon).ToList();
@@ -424,6 +507,21 @@ namespace JSBA.CloudCore.Extractor
                 {
                     roomBoundaries = _ntsPolygonizer.RemoveNestedPolygons(roomBoundaries);
                     _logger.LogInformation("PDFium Native: After NTS removing nested polygons: {Count} boundaries", roomBoundaries.Count);
+                }
+
+                // Filter by minimum area if specified
+                if (settings?.Polygon.MinArea > 0)
+                {
+                    roomBoundaries = _ntsPolygonizer.FilterByMinArea(roomBoundaries, settings.Polygon.MinArea);
+                    _logger.LogInformation("PDFium Native: After min area filter ({MinArea}): {Count} boundaries", settings.Polygon.MinArea, roomBoundaries.Count);
+                }
+
+                // Filter out thin strip polygons by minimum width
+                // This removes polygons that form between parallel wall lines (wall thickness artifacts)
+                if (settings?.Polygon.MinWidth > 0)
+                {
+                    roomBoundaries = _ntsPolygonizer.FilterByMinWidth(roomBoundaries, settings.Polygon.MinWidth);
+                    _logger.LogInformation("PDFium Native: After min width filter ({MinWidth}): {Count} boundaries", settings.Polygon.MinWidth, roomBoundaries.Count);
                 }
 
                 // Add to boundaries list
@@ -1157,6 +1255,8 @@ namespace JSBA.CloudCore.Extractor
 
                 // Determine path type
                 rawPath.PathType = DeterminePathType(points, segmentCount);
+                rawPath.PathTypeEnum = PathTypeEnum.Original; // All paths from PDF are original
+                rawPath.WallThickness = 0; // No wall thickness for original paths
 
                 return rawPath;
             }
@@ -1771,6 +1871,8 @@ namespace JSBA.CloudCore.Extractor
                     SegmentCount = segment.Points.Count,
                     PathLength = CalculatePathLength(segment.Points),
                     PathType = DeterminePathType(segment.Points, segment.Points.Count),
+                    PathTypeEnum = segment.OriginalPath.PathTypeEnum,
+                    WallThickness = segment.OriginalPath.WallThickness,
                     ObjectIndex = segment.OriginalPath.ObjectIndex
                 };
                 result.Add(rawPath);

@@ -71,7 +71,7 @@
         },
         "length": {
           "enabled": true,
-          "minLength": 20.0
+          "minLength": 25.0
         },
         "shape": {
           "enabled": false,
@@ -85,7 +85,8 @@
       "polygon": {
         "removeNested": false,
         "removeOuter": true,
-        "gapTolerance": 50
+        "gapTolerance": 50,
+        "minWidth": 25
       },
       "roomSize": {
         "enabled": false,
@@ -102,7 +103,7 @@
         },
         "length": {
           "enabled": true,
-          "minLength": 20.0
+          "minLength": 50.0
         },
         "shape": {
           "enabled": false,
@@ -116,7 +117,7 @@
       "polygon": {
         "removeNested": false,
         "removeOuter": true,
-        "gapTolerance": 0
+        "gapTolerance": 50
       },
       "roomSize": {
         "enabled": false,
@@ -148,6 +149,110 @@
         "removeNested": false,
         "removeOuter": true,
         "gapTolerance": 100.0
+      },
+      "roomSize": {
+        "enabled": false,
+        "minRoomCount": 5,
+        "maxRoomCount": 25
+      }
+    },
+    "Multiple rooms with room tags (no noise).pdf": {
+      "filters": {
+        "lineWidth": {
+          "enabled": false,
+          "minWidth": 0.05,
+          "maxWidth": 10.0
+        },
+        "length": {
+          "enabled": true,
+          "minLength": 30.0
+        },
+        "shape": {
+          "enabled": false,
+          "allowedShapes": [ "line", "rectangle" ]
+        },
+        "singleSegment": {
+          "enabled": false,
+          "offset": 10.0
+        }
+      },
+      "polygon": {
+        "removeNested": false,
+        "removeOuter": false,
+        "gapTolerance": 10,
+        "minArea": 50,
+        "minWidth": 20,
+        "maxWallThickness": 5,
+        "skipCollapseParallelWalls": true
+      },
+      "roomSize": {
+        "enabled": false,
+        "minRoomCount": 5,
+        "maxRoomCount": 25
+      }
+    },
+    "Multiple rooms with room tags (no noise)_tworooms.pdf": {
+      "filters": {
+        "lineWidth": {
+          "enabled": false,
+          "minWidth": 0.5,
+          "maxWidth": 10.0
+        },
+        "length": {
+          "enabled": true,
+          "minLength": 50.0
+        },
+        "shape": {
+          "enabled": false,
+          "allowedShapes": [ "line", "rectangle" ]
+        },
+        "singleSegment": {
+          "enabled": false,
+          "offset": 10.0
+        }
+      },
+      "polygon": {
+        "removeNested": false,
+        "removeOuter": false,
+        "gapTolerance": 0,
+        "minArea": 50,
+        "minWidth": 20,
+        "maxWallThickness": 10
+      },
+      "roomSize": {
+        "enabled": false,
+        "minRoomCount": 5,
+        "maxRoomCount": 25
+      }
+    },
+    "Multiple rooms with room tags (no noise)_tworooms_2.pdf": {
+      "filters": {
+        "lineWidth": {
+          "enabled": false,
+          "minWidth": 0.5,
+          "maxWidth": 10.0
+        },
+        "length": {
+          "enabled": true,
+          "minLength": 50.0
+        },
+        "shape": {
+          "enabled": false,
+          "allowedShapes": [ "line", "rectangle" ]
+        },
+        "singleSegment": {
+          "enabled": false,
+          "offset": 10.0
+        }
+      },
+      "polygon": {
+        "removeNested": false,
+        "removeOuter": false,
+        "gapTolerance": 10,
+        "minArea": 50,
+        "minWidth": 20,
+        "maxWallThickness": 10,
+        "skipCollapseParallelWalls": false
       },
       "roomSize": {
         "enabled": false,

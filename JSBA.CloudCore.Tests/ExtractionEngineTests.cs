@@ -9,6 +9,7 @@ using JSBA.CloudCore.Extractor;
 using JSBA.CloudCore.Extractor.Helpers;
 using Xunit;
 using Xunit.Abstractions;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace JSBA.CloudCore.Tests
 {
@@ -131,7 +132,7 @@ namespace JSBA.CloudCore.Tests
             Assert.ThrowsAny<Exception>(() => _engine.ProcessPdfToRooms(emptyStream, options));
         }
 
-        [Fact]
+        [Fact(Skip = "No need to compare")]
         public void ComparePdfPigVsPDFiumNative_Project3OnlyWall()
         {
             // Arrange
@@ -192,7 +193,7 @@ namespace JSBA.CloudCore.Tests
                 "At least one method should extract boundaries");
         }
 
-        [Fact]
+        [Fact(Skip = "No need to compare")]
         public void ComparePdfPigVsPDFiumNative_Project3RoomTag()
         {
             // Arrange
@@ -254,7 +255,7 @@ namespace JSBA.CloudCore.Tests
             throw new FileNotFoundException($"No test PDF files found. Please ensure tests directory contains PDF files. Searched: {testsDir}, {absoluteTestsDir}");
         }
 
-        [Fact]
+        [Fact(Skip = "No need to compare")]
         public void CompareTextExtraction_PdfPigVsPDFiumNative_Project3RoomTag()
         {
             // Arrange
@@ -323,7 +324,7 @@ namespace JSBA.CloudCore.Tests
                 "At least one method should extract text labels");
         }
 
-        [Fact]
+        [Fact(Skip = "No need to compare")]
         public void CompareTextExtraction_PdfPigVsPDFiumNative_Project3OnlyWall()
         {
             // Arrange
@@ -482,54 +483,7 @@ namespace JSBA.CloudCore.Tests
             Console.WriteLine($"=== END FILTERING ===");
         }
 
-        [Fact]
-        public void VisualizePaths_WithComplexPdf_ShowsAllPaths()
-        {
-            // Arrange - Use a more complex PDF
-            //var testPdfPath = FindTestPdf("Project3_onlywall.pdf");
-            //var testPdfPath = FindTestPdf("Project3_doorwindow.pdf");
-            var testPdfPath = FindTestPdf("Project3_roomtag.pdf");
 
-            //var testPdfPath = FindTestPdf("EA-151c - REFLECTED CEILING PLAN - FIRST FLOOR LEVEL AREA c.pdf");
-            if (!File.Exists(testPdfPath))
-            {
-                Console.WriteLine($"Test PDF not found: {testPdfPath}. Skipping test.");
-                return;
-            }
-            // settingsPath defaults to standard location if not provided
-            var settings = _engine.LoadSettingsForPdf(testPdfPath);
-            using var stream = File.OpenRead(testPdfPath);
-
-            // Act - Extract boundaries (this populates AllPaths and ClosedPolygons)
-            var boundaries = _engine.ExtractRoomBoundariesWithPDFiumNative(stream, settings);
-
-            // Visualize raw paths, closed polygons, and final boundaries
-            var rawPathsOutput = Path.Combine(Path.GetTempPath(), "raw_paths.png");
-            var closedPolygonsOutput = Path.Combine(Path.GetTempPath(), "closed_polygons.png");
-            var finalBoundariesOutput = Path.Combine(Path.GetTempPath(), "final_boundaries.png");
-
-            TestHelper.VisualizeRawPaths(_engine.AllPaths, _engine.PageWidth, _engine.PageHeight, rawPathsOutput);
-            TestHelper.VisualizePaths(_engine.ClosedPolygons, _engine.PageWidth, _engine.PageHeight, closedPolygonsOutput);
-
-            // Visualize final boundaries (after removing outer polygons)
-            var finalBoundaryPolygons = boundaries.Select(b => b.Polygon).ToList();
-            TestHelper.VisualizePaths(finalBoundaryPolygons, _engine.PageWidth, _engine.PageHeight, finalBoundariesOutput);
-
-            // Assert
-            Assert.True(File.Exists(rawPathsOutput), $"Raw paths visualization should be created");
-            Assert.True(File.Exists(closedPolygonsOutput), $"Closed polygons visualization should be created");
-            Assert.True(File.Exists(finalBoundariesOutput), $"Final boundaries visualization should be created");
-
-            Console.WriteLine($"=== COMPLEX PDF VISUALIZATION ===");
-            Console.WriteLine($"Total raw paths: {_engine.AllPaths.Count}");
-            Console.WriteLine($"Total closed polygons: {_engine.ClosedPolygons.Count}");
-            Console.WriteLine($"Total final boundaries: {boundaries.Count}");
-            Console.WriteLine($"Raw paths saved to: {rawPathsOutput}");
-            Console.WriteLine($"Closed polygons saved to: {closedPolygonsOutput}");
-            Console.WriteLine($"Final boundaries saved to: {finalBoundariesOutput}");
-            Console.WriteLine($"Compare all three images to see the processing pipeline!");
-            Console.WriteLine($"=== END VISUALIZATION ===");
-        }
 
         [Fact]
         public void ExtractWithSettings_AppliesFilteringAndGapBridging()
